@@ -1,0 +1,185 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: imhas-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: hospital-ai
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - imhas-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Queue
+  redis:
+    image: redis:7-alpine
+    container_name: imhas-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - imhas-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Backend API Server
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: imhas-backend
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      - NODE_ENV=production
+      - PORT=5001
+      - MONGO_URI=mongodb://mongodb:27017/hospital-ai
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - LLM_MODEL=gemini-2.0-flash-exp
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - imhas-network
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  # Intake Agent
+  intake-agent:
+    build:
+      context: .
+      dockerfile: ./agents/intake-agent/Dockerfile
+    container_name: imhas-intake-agent
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - MONGO_URI=mongodb://mongodb:27017/hospital-ai
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - imhas-network
+
+  # RAG Indexer Agent
+  rag-agent:
+    build:
+      context: .
+      dockerfile: ./agents/rag-indexer-agent/Dockerfile
+    container_name: imhas-rag-agent
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - MONGO_URI=mongodb://mongodb:27017/hospital-ai
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - imhas-network
+
+  # Diagnostics Agent
+  diagnostics-agent:
+    build:
+      context: .
+      dockerfile: ./agents/diagnostics-agent/Dockerfile
+    container_name: imhas-diagnostics-agent
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - MONGO_URI=mongodb://mongodb:27017/hospital-ai
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - TOP_K=6
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - imhas-network
+
+  # Billing Agent
+  billing-agent:
+    build:
+      context: .
+      dockerfile: ./agents/billing-agent/Dockerfile
+    container_name: imhas-billing-agent
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - MONGO_URI=mongodb://mongodb:27017/hospital-ai
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - imhas-network
+
+  # Security Agent
+  security-agent:
+    build:
+      context: .
+      dockerfile: ./agents/security-agent/Dockerfile
+    container_name: imhas-security-agent
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - MONGO_URI=mongodb://mongodb:27017/hospital-ai
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - imhas-network
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: imhas-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:5001/api
+    depends_on:
+      - backend
+    networks:
+      - imhas-network
+
+networks:
+  imhas-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data:
