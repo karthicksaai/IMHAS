@@ -107,7 +107,7 @@ text
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 ### **Backend**
 - **Runtime**: Node.js 20.x
@@ -136,7 +136,7 @@ text
 
 ---
 
-## 📦 Prerequisites
+## Prerequisites
 
 ### **Required**
 - Node.js 20.x or higher
@@ -151,12 +151,11 @@ text
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### **Option 1: Docker (Recommended)**
 
 1. **Clone the repository**
-```bash
 git clone https://github.com/yourusername/imhas.git
 cd imhas
 Set up environment variables
@@ -257,7 +256,8 @@ Terminal 9: Frontend
 bash
 cd frontend
 npm run dev
-📖 Usage
+
+Usage
 1. Patient Intake
 Login to the dashboard (default: any email/password in dev mode)
 
@@ -306,7 +306,7 @@ Check anomaly alerts
 
 Filter by user, action, or anomaly status
 
-📁 Project Structure
+Project Structure
 text
 IMHAS/
 ├── frontend/                   # React application
@@ -378,7 +378,8 @@ text
 POST   /security/log          # Log access event
 GET    /security/logs         # Get audit logs
 GET    /security/alerts       # Get anomalies
-🤖 Agents
+
+Agents
 1. Intake Agent
 Queue: intake
 
@@ -462,7 +463,7 @@ Dangerous operations (deletions)
 
 Suspicious patterns
 
-🧪 Testing
+Testing
 Run Backend Tests
 bash
 cd backend
@@ -476,7 +477,7 @@ Use Postman/Insomnia for API testing
 
 Import collection from docs/postman_collection.json
 
-🐛 Troubleshooting
+Troubleshooting
 Problem: Agents not processing jobs
 Check Redis connection: redis-cli ping
 
@@ -496,7 +497,7 @@ Check quota: https://ai.google.dev/
 
 Rate limit: 60 requests/minute
 
-🤝 Contributing
+Contributing
 Contributions are welcome! Please follow these steps:
 
 Fork the repository
@@ -509,13 +510,11 @@ Push to branch (git push origin feature/amazing-feature)
 
 Open a Pull Request
 
-📄 License
+License
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-👨‍💻 Authors
-Your Name - Initial work - YourGitHub
 
-🙏 Acknowledgments
+Acknowledgments
 Google Gemini for LLM capabilities
 
 Xenova for Transformers.js
@@ -524,7 +523,7 @@ MongoDB team for excellent documentation
 
 BullMQ for robust queue management
 
-📞 Support
+Support
 For issues and questions:
 
 GitHub Issues: Create an issue
@@ -533,7 +532,7 @@ Email: support@imhas.com
 
 Documentation: Full Docs
 
-🗺️ Roadmap
+Roadmap
  Add user authentication (JWT)
 
  Implement role-based access control (RBAC)
@@ -557,7 +556,6 @@ text
 ***
 
 ## **LICENSE** (Root Level)
-```text
 MIT License
 
 Copyright (c) 2026 IMHAS Team
@@ -579,130 +577,5 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-.env.example (Root Level - Safe to commit)
-text
-# ==============================================
-# IMHAS - Environment Configuration Template
-# Copy this to .env and fill in your values
-# ==============================================
 
-# MongoDB
-MONGO_URI=mongodb://127.0.0.1:27017/hospital-ai
-
-# Redis
-REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
-
-# Google Gemini API (Required)
-# Get your key at: https://ai.google.dev/
-GEMINI_API_KEY=your-gemini-api-key-here
-
-# LLM Configuration
-LLM_MODEL=gemini-2.0-flash-exp
-
-# Backend Server
-PORT=5001
-NODE_ENV=development
-
-# Frontend
-VITE_API_URL=http://localhost:5001/api
-
-# Agent Configuration
-TOP_K=6
-
-# Optional: Docker overrides
-# Uncomment if using Docker
-# MONGO_URI=mongodb://mongodb:27017/hospital-ai
-# REDIS_HOST=redis
-Dockerfile (backend/Dockerfile)
-text
-FROM node:20-alpine
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm ci --only=production
-
-# Copy application code
-COPY . .
-
-# Expose port
-EXPOSE 5001
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
-  CMD node -e "require('http').get('http://localhost:5001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
-
-# Start server
-CMD ["node", "server.js"]
-Dockerfile (frontend/Dockerfile)
-text
-FROM node:20-alpine AS builder
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci
-
-COPY . .
-RUN npm run build
-
-# Production stage
-FROM nginx:alpine
-
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Copy custom nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-EXPOSE 3000
-
-CMD ["nginx", "-g", "daemon off;"]
-nginx.conf (frontend/nginx.conf)
-text
-server {
-    listen 3000;
-    server_name localhost;
-    root /usr/share/nginx/html;
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    location /api {
-        proxy_pass http://backend:5001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-
-    # Gzip compression
-    gzip on;
-    gzip_types text/css application/javascript application/json image/svg+xml;
-    gzip_comp_level 6;
-}
-Dockerfile (agents/*/Dockerfile - Generic for all agents)
-Create this in each agent folder:
-
-text
-FROM node:20-alpine
-
-WORKDIR /app
-
-# Copy shared dependencies first
-COPY shared/ /app/shared/
-
-# Copy agent-specific files
-COPY agents/intake-agent/package*.json ./
-RUN npm ci --only=production
-
-COPY agents/intake-agent/ ./
-
-# Start agent
 CMD ["node", "src/index.js"]
