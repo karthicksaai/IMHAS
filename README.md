@@ -274,48 +274,7 @@ Check anomaly alerts
 
 Filter by user, action, or anomaly status
 
-Project Structure
-text
-IMHAS/
-├── frontend/                   # React application
-│   ├── src/
-│   │   ├── api/               # API clients
-│   │   ├── components/        # Reusable UI components
-│   │   ├── pages/             # Page components
-│   │   ├── context/           # React Context
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── package.json
-│   └── vite.config.js
-│
-├── backend/                    # Express API server
-│   ├── src/
-│   │   ├── controllers/       # Request handlers
-│   │   ├── routes/            # API routes
-│   │   ├── queues/            # BullMQ queues
-│   │   ├── middleware/        # Express middleware
-│   │   └── utils/             # Helper functions
-│   ├── server.js
-│   └── package.json
-│
-├── agents/                     # AI agent workers
-│   ├── intake-agent/
-│   ├── rag-indexer-agent/
-│   ├── diagnostics-agent/
-│   ├── billing-agent/
-│   └── security-agent/
-│
-├── shared/                     # Shared code
-│   ├── config/                # DB & Redis connections
-│   ├── models/                # MongoDB schemas
-│   └── services/              # BERT, Gemini, vector utils
-│
-├── docker-compose.yml
-├── .env
-├── .gitignore
-└── README.md
-🔌 API Documentation
-Base URL: http://localhost:5001/api
+
 Endpoints
 Patients
 text
