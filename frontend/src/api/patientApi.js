@@ -9,7 +9,7 @@ export const patientApi = {
     });
     if (!response.ok) throw new Error('Failed to fetch patients');
     const data = await response.json();
-    return data.patients || data; // Handle both formats
+    return data.patients || data;
   },
 
   // Get single patient
@@ -26,7 +26,7 @@ export const patientApi = {
   createPatient: async (formData) => {
     const response = await fetch(`${API_URL}/intake`, {
       method: 'POST',
-      body: formData, // FormData with file upload
+      body: formData,
     });
     if (!response.ok) throw new Error('Failed to create patient');
     return response.json();
@@ -39,18 +39,77 @@ export const patientApi = {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
-      
       if (!response.ok) {
-        if (response.status === 404) {
-          return [];
-        }
+        if (response.status === 404) return [];
         throw new Error('Failed to fetch documents');
       }
-      
       return response.json();
     } catch (error) {
       console.warn('Documents not available:', error);
       return [];
     }
+  },
+
+  // Get patient diagnostics
+  getPatientDiagnostics: async (patientId) => {
+    try {
+      const response = await fetch(`${API_URL}/patients/${patientId}/diagnostics`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) return [];
+      return response.json();
+    } catch {
+      return [];
+    }
+  },
+
+  // Get patient billing proposals
+  getPatientBilling: async (patientId) => {
+    try {
+      const response = await fetch(`${API_URL}/patients/${patientId}/billing`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) return [];
+      return response.json();
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Fetch patient + documents + diagnostics + billing in parallel,
+   * build a structured JSON blob, and trigger a browser download.
+   */
+  downloadRecords: async (patientId, patientName) => {
+    const [patient, documents, diagnostics, billing] = await Promise.allSettled([
+      patientApi.getPatient(patientId),
+      patientApi.getPatientDocuments(patientId),
+      patientApi.getPatientDiagnostics(patientId),
+      patientApi.getPatientBilling(patientId),
+    ]);
+
+    const record = {
+      exportedAt: new Date().toISOString(),
+      patient: patient.status === 'fulfilled' ? patient.value : null,
+      documents: documents.status === 'fulfilled' ? documents.value : [],
+      diagnostics: diagnostics.status === 'fulfilled' ? diagnostics.value : [],
+      billing: billing.status === 'fulfilled' ? billing.value : [],
+    };
+
+    const blob = new Blob([JSON.stringify(record, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    // Sanitise name for filename
+    const safeName = (patientName || 'patient').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    a.download = `IMHAS_${safeName}_${patientId.slice(-6)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   },
 };
