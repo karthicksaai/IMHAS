@@ -1,34 +1,35 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
 export const billingApi = {
-  // Optimize billing
   optimizeBilling: async (data) => {
-    const response = await fetch(`${API_URL}/billing`, {
+    const response = await fetch(`${API_URL}/billing/optimize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Failed to optimize billing');
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to optimize billing');
+    }
     return response.json();
   },
 
-  // Get billing history for patient
-  getPatientBilling: async (patientId) => {
-    const response = await fetch(`${API_URL}/billing/patient/${patientId}`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!response.ok) throw new Error('Failed to fetch billing');
-    return response.json();
+  getBillingProposals: async (patientId) => {
+    try {
+      const response = await fetch(`${API_URL}/billing/${patientId}`);
+      if (!response.ok) return [];
+      return response.json();
+    } catch { return []; }
   },
 
-  // Get single billing proposal
-  getBilling: async (id) => {
-    const response = await fetch(`${API_URL}/billing/${id}`, {
-      method: 'GET',
+  // Approve or reject a billing proposal
+  reviewBilling: async (id, { approvalStatus, reviewNote, reviewedBy }) => {
+    const response = await fetch(`${API_URL}/billing/proposal/${id}/review`, {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approvalStatus, reviewNote, reviewedBy }),
     });
-    if (!response.ok) throw new Error('Failed to fetch billing');
+    if (!response.ok) throw new Error('Failed to submit billing review');
     return response.json();
   },
 };
