@@ -20,10 +20,11 @@ const billingWorker = new Worker(
     console.log("========================================");
 
     try {
-      const { patientId, treatments, constraints, patientConditions } = job.data;
+      const { patientId, treatments, constraints, patientConditions, patientAge } = job.data;
 
       console.log(`Patient: ${patientId}`);
       console.log(`Treatments to optimize: ${treatments.length}`);
+      console.log(`Patient age: ${patientAge ?? "unknown"}`);
       console.log(`Patient conditions: ${patientConditions?.join(", ") || "None"}`);
 
       // 1. Optimize treatment costs using AI
@@ -46,10 +47,11 @@ const billingWorker = new Worker(
       console.log(`Original total: $${totalOriginal.toFixed(2)}`);
       console.log(`Optimized total: $${totalOptimized.toFixed(2)}`);
 
-      // 3. Apply discount rules
+      // 3. Apply discount rules — now includes patientAge so senior discount fires
       console.log("Applying discount rules...");
       const { finalTotal, discounts } = applyDiscountRules(totalOptimized, {
         patientConditions,
+        patientAge,
         treatmentCount: treatments.length,
       });
 
@@ -73,7 +75,7 @@ const billingWorker = new Worker(
       });
 
       const duration = Date.now() - startTime;
-      console.log(`\nBilling Agent] Job ${job.id} completed in ${duration}ms`);
+      console.log(`\n[Billing Agent] Job ${job.id} completed in ${duration}ms`);
 
       return {
         status: "success",
