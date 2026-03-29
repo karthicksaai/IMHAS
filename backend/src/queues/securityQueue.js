@@ -1,16 +1,13 @@
 import { Queue } from "bullmq";
-import { redisConnection } from "../../../../shared/config/redis.js";
+import { redisConnection } from "../../../shared/config/redis.js";
 
 export const securityQueue = new Queue("security", {
   connection: redisConnection,
   defaultJobOptions: {
-    attempts: 2,
-    backoff: {
-      type: "fixed",
-      delay: 1000,
-    },
-    removeOnComplete: 200,
-    removeOnFail: 1000,
+    attempts: 3,
+    backoff: { type: "exponential", delay: 2000 },
+    removeOnComplete: 100,
+    removeOnFail: 500,
   },
 });
 
