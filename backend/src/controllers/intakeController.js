@@ -38,23 +38,27 @@ export const patientIntake = async (req, res, next) => {
 
     console.log(`Patient created: ${patient._id}`);
 
-    // Save document if text exists
+    // Save document if text exists and capture its ID directly
+    let docId = null;
     if (rawText.trim()) {
-      await Document.create({
+      const doc = await Document.create({
         patientId: patient._id.toString(),
         text: rawText,
         source: "upload",
         metadata,
       });
-      console.log(`Document saved`);
+      docId = doc._id.toString();
+      console.log(`Document saved: ${docId}`);
     }
 
     // Convert file to base64 for agent processing
     const base64File = file ? fileToBase64(file) : null;
 
-    // Queue intake job for agent processing
+    // Queue intake job for agent processing — pass docId directly so agent
+    // does not need to do an unreliable Document.findOne({ text }) lookup
     const job = await intakeQueue.add("process-intake", {
       patientId: patient._id.toString(),
+      docId,
       name,
       age: parseInt(age),
       rawText,
