@@ -1,12 +1,11 @@
 import "dotenv/config";
-import { Worker } from "bullmq";
+import { Worker, Queue } from "bullmq";
 import { connectDB } from "../../../shared/config/db.js";
 import { redisConnection } from "../../../shared/config/redis.js";
 import Patient from "../../../shared/models/Patient.js";
 import Document from "../../../shared/models/Document.js";
 import { parseIntakeDocument } from "./parser.js";
 import { processDocument } from "./processor.js";
-import { Queue } from "bullmq";
 
 // Connect to MongoDB
 await connectDB(process.env.MONGO_URI);
@@ -25,7 +24,7 @@ const intakeWorker = new Worker(
     console.log("========================================");
 
     try {
-      const { patientId, name, age, rawText, base64File, metadata } = job.data;
+      const { patientId, docId, name, age, rawText, base64File, metadata } = job.data;
 
       // 1. Verify patient exists
       let patient = await Patient.findById(patientId);
@@ -65,26 +64,37 @@ const intakeWorker = new Worker(
 
       console.log("Patient medical history updated");
 
-      // 5. Advanced document processing (optional enhancements)
+      // 5. Advanced document processing
       const processedMetadata = await processDocument(processedText, medicalData);
 
       console.log("Document processing completed");
 
-      // 6. Find the document to get docId
-      const doc = await Document.findOne({ patientId, text: processedText });
-
-      if (doc) {
-        // 7. Trigger RAG indexing
-        console.log("Sending to RAG indexer...");
+      // 6. Use docId passed directly from the controller (reliable)
+      //    instead of doing an unreliable Document.findOne({ text }) query
+      if (docId) {
+        console.log(`Sending document ${docId} to RAG indexer...`);
         await ragQueue.add("index-document", {
           patientId,
-          docId: doc._id.toString(),
+          docId,
           text: processedText,
           metadata: processedMetadata,
         });
-        console.log("RAG indexing job queued");
+        console.log("RAG indexing job queued successfully");
       } else {
-        console.log("Document not found, skipping RAG indexing");
+        // Fallback: no docId in job data (old job format), try to find doc
+        console.log("No docId in job data, attempting fallback document lookup...");
+        const doc = await Document.findOne({ patientId }).sort({ createdAt: -1 });
+        if (doc) {
+          await ragQueue.add("index-document", {
+            patientId,
+            docId: doc._id.toString(),
+            text: processedText,
+            metadata: processedMetadata,
+          });
+          console.log("RAG indexing job queued via fallback");
+        } else {
+          console.log("No document found, skipping RAG indexing");
+        }
       }
 
       const duration = Date.now() - startTime;
@@ -94,7 +104,7 @@ const intakeWorker = new Worker(
         status: "success",
         patientId,
         medicalDataExtracted: true,
-        ragIndexingQueued: !!doc,
+        ragIndexingQueued: !!docId,
         processingTime: duration,
       };
     } catch (error) {
