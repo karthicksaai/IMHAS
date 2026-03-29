@@ -1,5 +1,5 @@
-import Patient from "../../../../shared/models/Patient.js";
-import Document from "../../../../shared/models/Document.js";
+import Patient from "../../../shared/models/Patient.js";
+import Document from "../../../shared/models/Document.js";
 import { intakeQueue } from "../queues/intakeQueue.js";
 import { fileToBase64, generatePseudonym } from "../utils/helpers.js";
 
@@ -14,7 +14,6 @@ export const patientIntake = async (req, res, next) => {
 
     console.log(`Intake request: ${name}, ${age} years`);
 
-    // Extract text from uploaded file
     let rawText = "";
     let metadata = {};
 
@@ -29,7 +28,6 @@ export const patientIntake = async (req, res, next) => {
       console.log(`Text extracted: ${rawText.length} characters`);
     }
 
-    // Create patient record
     const patient = await Patient.create({
       name,
       age: parseInt(age),
@@ -38,7 +36,6 @@ export const patientIntake = async (req, res, next) => {
 
     console.log(`Patient created: ${patient._id}`);
 
-    // Save document if text exists and capture its ID directly
     let docId = null;
     if (rawText.trim()) {
       const doc = await Document.create({
@@ -51,11 +48,8 @@ export const patientIntake = async (req, res, next) => {
       console.log(`Document saved: ${docId}`);
     }
 
-    // Convert file to base64 for agent processing
     const base64File = file ? fileToBase64(file) : null;
 
-    // Queue intake job for agent processing — pass docId directly so agent
-    // does not need to do an unreliable Document.findOne({ text }) lookup
     const job = await intakeQueue.add("process-intake", {
       patientId: patient._id.toString(),
       docId,

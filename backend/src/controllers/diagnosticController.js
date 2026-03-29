@@ -1,21 +1,16 @@
-import Diagnostic from "../../../../shared/models/Diagnostic.js";
-import Patient from "../../../../shared/models/Patient.js";
+import Diagnostic from "../../../shared/models/Diagnostic.js";
+import Patient from "../../../shared/models/Patient.js";
 import { diagnosticsQueue } from "../queues/diagnosticsQueue.js";
-import { checkDrugInteractions } from "../../../../shared/data/drugInteractions.js";
+import { checkDrugInteractions } from "../../../shared/data/drugInteractions.js";
 
 export const runDiagnostics = async (req, res, next) => {
   try {
     const { patientId, question } = req.body;
 
     if (!patientId || !question) {
-      return res.status(400).json({
-        error: "patientId and question are required",
-      });
+      return res.status(400).json({ error: "patientId and question are required" });
     }
 
-    console.log(`Diagnostic request for patient: ${patientId}`);
-
-    // Create diagnostic record with pending_review approval status
     const diagnostic = await Diagnostic.create({
       patientId,
       question,
@@ -28,8 +23,6 @@ export const runDiagnostics = async (req, res, next) => {
       patientId,
       question,
     });
-
-    console.log(`Diagnostic job queued: ${job.id}`);
 
     res.json({
       success: true,
@@ -56,16 +49,13 @@ export const getDiagnosticById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const diagnostic = await Diagnostic.findById(id);
-    if (!diagnostic) {
-      return res.status(404).json({ error: "Diagnostic not found" });
-    }
+    if (!diagnostic) return res.status(404).json({ error: "Diagnostic not found" });
     res.json(diagnostic);
   } catch (err) {
     next(err);
   }
 };
 
-// Doctor approves or rejects an AI diagnostic result
 export const reviewDiagnostic = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -77,37 +67,23 @@ export const reviewDiagnostic = async (req, res, next) => {
 
     const diagnostic = await Diagnostic.findByIdAndUpdate(
       id,
-      {
-        approvalStatus,
-        reviewNote: reviewNote || "",
-        reviewedBy: reviewedBy || "doctor",
-        reviewedAt: new Date(),
-      },
+      { approvalStatus, reviewNote: reviewNote || "", reviewedBy: reviewedBy || "doctor", reviewedAt: new Date() },
       { new: true }
     );
 
-    if (!diagnostic) {
-      return res.status(404).json({ error: "Diagnostic not found" });
-    }
-
-    console.log(`Diagnostic ${id} ${approvalStatus} by ${reviewedBy}`);
+    if (!diagnostic) return res.status(404).json({ error: "Diagnostic not found" });
     res.json({ success: true, diagnostic });
   } catch (err) {
     next(err);
   }
 };
 
-// Second opinion — re-run same question with a conservative prompt strategy
 export const getSecondOpinion = async (req, res, next) => {
   try {
     const { id } = req.params;
-
     const original = await Diagnostic.findById(id);
-    if (!original) {
-      return res.status(404).json({ error: "Diagnostic not found" });
-    }
+    if (!original) return res.status(404).json({ error: "Diagnostic not found" });
 
-    // Create a new diagnostic record flagged as second opinion
     const secondOpinion = await Diagnostic.create({
       patientId: original.patientId,
       question: original.question,
@@ -124,28 +100,21 @@ export const getSecondOpinion = async (req, res, next) => {
       isSecondOpinion: true,
     });
 
-    res.json({
-      success: true,
-      diagnosticId: secondOpinion._id,
-      message: "Second opinion analysis queued",
-    });
+    res.json({ success: true, diagnosticId: secondOpinion._id, message: "Second opinion queued" });
   } catch (err) {
     next(err);
   }
 };
 
-// Drug interaction check endpoint — rule-based, no AI
 export const checkInteractions = async (req, res, next) => {
   try {
     const { patientId, proposedDrugs } = req.body;
-
     if (!patientId || !Array.isArray(proposedDrugs)) {
       return res.status(400).json({ error: "patientId and proposedDrugs array required" });
     }
 
     const patient = await Patient.findById(patientId);
     const existingMedications = patient?.medicalHistory?.medications || [];
-
     const conflicts = checkDrugInteractions(proposedDrugs, existingMedications);
 
     res.json({
