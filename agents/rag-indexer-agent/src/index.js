@@ -3,7 +3,7 @@ import { Worker } from "bullmq";
 import { connectDB } from "../../../shared/config/db.js";
 import { redisConnection } from "../../../shared/config/redis.js";
 import Embedding from "../../../shared/models/Embedding.js";
-import { chunkText } from "./chunker.js";
+import { smartChunkText } from "./chunker.js";
 import { embedChunks } from "./embedder.js";
 import { storeVectors } from "./vectorStore.js";
 
@@ -27,13 +27,14 @@ const ragWorker = new Worker(
       console.log(`Patient: ${patientId}`);
       console.log(`Text length: ${text.length} characters`);
 
-      // 1. Chunk the document text
-      console.log("Chunking document...");
-      const chunks = chunkText(text, {
-        size: 500,
-        overlap: 100,
+      // 1. Smart-chunk the document — respects sentence boundaries for better
+      //    semantic coherence, producing higher-quality RAG retrieval
+      console.log("Smart-chunking document (sentence-aware)...");
+      const chunks = smartChunkText(text, {
+        maxSize: 500,
+        minSize: 150,
       });
-      console.log(`Created ${chunks.length} chunks`);
+      console.log(`Created ${chunks.length} smart chunks`);
 
       // 2. Generate embeddings for all chunks
       console.log("Generating embeddings...");
