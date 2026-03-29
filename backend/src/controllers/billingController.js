@@ -14,9 +14,10 @@ export const optimizeBilling = async (req, res, next) => {
 
     console.log(`Billing optimization for patient: ${patientId}`);
 
-    // Get patient conditions for intelligent optimization
+    // Get patient data for intelligent optimization
     const patient = await Patient.findById(patientId);
     const patientConditions = patient?.medicalHistory?.conditions || [];
+    const patientAge = patient?.age || null; // pass age so senior discount can fire
 
     // Queue billing job
     const job = await billingQueue.add("optimize-billing", {
@@ -24,6 +25,7 @@ export const optimizeBilling = async (req, res, next) => {
       treatments,
       constraints: constraints || {},
       patientConditions,
+      patientAge,
     });
 
     console.log(`Billing job queued: ${job.id}`);
