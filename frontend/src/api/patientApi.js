@@ -78,10 +78,7 @@ export const patientApi = {
     }
   },
 
-  /**
-   * Fetch patient + documents + diagnostics + billing in parallel,
-   * build a structured JSON blob, and trigger a browser download.
-   */
+  // Download all patient records as JSON
   downloadRecords: async (patientId, patientName) => {
     const [patient, documents, diagnostics, billing] = await Promise.allSettled([
       patientApi.getPatient(patientId),
@@ -92,19 +89,16 @@ export const patientApi = {
 
     const record = {
       exportedAt: new Date().toISOString(),
-      patient: patient.status === 'fulfilled' ? patient.value : null,
-      documents: documents.status === 'fulfilled' ? documents.value : [],
-      diagnostics: diagnostics.status === 'fulfilled' ? diagnostics.value : [],
-      billing: billing.status === 'fulfilled' ? billing.value : [],
+      patient:    patient.status    === 'fulfilled' ? patient.value    : null,
+      documents:  documents.status  === 'fulfilled' ? documents.value  : [],
+      diagnostics:diagnostics.status=== 'fulfilled' ? diagnostics.value: [],
+      billing:    billing.status    === 'fulfilled' ? billing.value    : [],
     };
 
-    const blob = new Blob([JSON.stringify(record, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    // Sanitise name for filename
+    const blob = new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
     const safeName = (patientName || 'patient').replace(/[^a-z0-9]/gi, '_').toLowerCase();
     a.download = `IMHAS_${safeName}_${patientId.slice(-6)}.json`;
     document.body.appendChild(a);
@@ -113,3 +107,9 @@ export const patientApi = {
     URL.revokeObjectURL(url);
   },
 };
+
+/* ── Named exports (used by redesigned components) ───────────────────── */
+export const getPatients            = () => patientApi.getAllPatients();
+export const getPatient             = (id) => patientApi.getPatient(id);
+export const registerPatient        = (formData) => patientApi.createPatient(formData);
+export const downloadPatientRecords = (id, name) => patientApi.downloadRecords(id, name);
