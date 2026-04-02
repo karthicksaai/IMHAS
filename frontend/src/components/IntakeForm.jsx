@@ -30,7 +30,11 @@ export default function IntakeForm({ onSuccess }) {
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => fd.append(k, v));
-      files.forEach(f => fd.append('documents', f));
+      // Backend reads req.files?.file — send only the FIRST file under the key "file"
+      // (express-fileupload maps the FormData field name directly to req.files[fieldName])
+      if (files.length > 0) {
+        fd.append('file', files[0]);
+      }
       await registerPatient(fd);
       onSuccess?.();
     } catch (err) {
@@ -117,19 +121,20 @@ export default function IntakeForm({ onSuccess }) {
         >
           <span className="text-3xl block mb-2">📄</span>
           <p className="text-sm font-medium text-slate-600">Drop files here or <span style={{ color:'#0ea5e9' }}>browse</span></p>
-          <p className="text-xs text-slate-400 mt-1">PDF, DOCX, JPG, PNG · Max 10MB each</p>
-          <input ref={fileRef} type="file" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+          <p className="text-xs text-slate-400 mt-1">PDF, TXT, DOCX, JPG, PNG · Max 10MB each</p>
+          {/* Added .txt — backend intakeController reads req.files?.file as key "file" */}
+          <input ref={fileRef} type="file" multiple accept=".pdf,.txt,.doc,.docx,.jpg,.jpeg,.png"
             className="hidden" onChange={e => handleFiles(e.target.files)} />
         </div>
 
-        {/* File previews */}
         {files.length > 0 && (
           <div className="mt-3 flex flex-col gap-2">
             {files.map((f, i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg"
-                   style={{ background:'#f0fdf4', border:'1px solid #bbf7d0' }}>
-                <span className="text-emerald-500">✓</span>
+                   style={{ background: i === 0 ? '#f0fdf4' : '#fafafa', border: i === 0 ? '1px solid #bbf7d0' : '1px solid #e2e8f0' }}>
+                <span className={i === 0 ? 'text-emerald-500' : 'text-slate-400'}>{i === 0 ? '✓' : '○'}</span>
                 <span className="text-sm text-slate-700 truncate flex-1">{f.name}</span>
+                {i === 0 && <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Primary</span>}
                 <span className="text-xs text-slate-400">{(f.size / 1024).toFixed(0)} KB</span>
                 <button type="button" onClick={() => setFiles(p => p.filter((_, j) => j !== i))}
                   className="text-slate-400 hover:text-red-500 transition-colors"
@@ -138,6 +143,9 @@ export default function IntakeForm({ onSuccess }) {
                 </button>
               </div>
             ))}
+            {files.length > 1 && (
+              <p className="text-xs text-amber-600 mt-1">⚠️ Only the first file (Primary) will be indexed for AI Diagnostics.</p>
+            )}
           </div>
         )}
       </div>
