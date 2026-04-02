@@ -33,3 +33,8 @@ export const securityApi = {
     return response.json();
   },
 };
+
+/* ── Named exports (used by redesigned components) ───────────────────── */
+export const getAuditLogs  = (filters) => securityApi.getAuditLogs(filters);
+export const getAnomalies  = ()        => securityApi.getAnomalies();
+export const logAccess     = (data)    => securityApi.logAccess(data);
