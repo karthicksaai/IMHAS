@@ -1,210 +1,155 @@
-import { useState } from 'react';
-import { patientApi } from '../api/patientApi';
-import { useApp } from '../context/AppContext';
+import { useState, useRef } from 'react';
+import { registerPatient } from '../api/patientApi';
 
-const IntakeForm = ({ onSuccess }) => {
-  const { addNotification } = useApp();
-  const [formData, setFormData] = useState({
-    name: '',
-    age: '',
-    document: null,
-  });
+export default function IntakeForm({ onSuccess }) {
+  const [form, setForm] = useState({ name: '', age: '', gender: '', bloodType: '', contact: '', address: '' });
+  const [files, setFiles]     = useState([]);
+  const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
+  const [error, setError]     = useState('');
+  const fileRef = useRef();
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setFormData((prev) => ({ ...prev, document: file }));
-    }
-  };
-
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
+  const handleFiles = (incoming) => {
+    setFiles(prev => [
+      ...prev,
+      ...Array.from(incoming).filter(f => !prev.find(p => p.name === f.name)),
+    ]);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setFormData((prev) => ({ ...prev, document: e.dataTransfer.files[0] }));
-    }
+    setDragOver(false);
+    handleFiles(e.dataTransfer.files);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!formData.name || !formData.age || !formData.document) {
-      addNotification({ type: 'error', message: 'Please fill all fields' });
-      return;
-    }
-
+    setError('');
+    if (!form.name.trim()) { setError('Patient name is required.'); return; }
     setLoading(true);
     try {
-      const data = new FormData();
-      data.append('name', formData.name);
-      data.append('age', formData.age);
-      data.append('document', formData.document);
-
-      const result = await patientApi.createPatient(data);
-      
-      addNotification({ 
-        type: 'success', 
-        message: `Patient ${formData.name} registered successfully!` 
-      });
-      
-      setFormData({ name: '', age: '', document: null });
-      if (onSuccess) onSuccess(result);
-    } catch (error) {
-      addNotification({ type: 'error', message: error.message });
+      const fd = new FormData();
+      Object.entries(form).forEach(([k, v]) => fd.append(k, v));
+      files.forEach(f => fd.append('documents', f));
+      await registerPatient(fd);
+      onSuccess?.();
+    } catch (err) {
+      setError(err.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  const fields = [
+    { key:'name',      label:'Full Name *',   placeholder:'Jane Doe',         type:'text' },
+    { key:'age',       label:'Age',           placeholder:'34',               type:'number' },
+    { key:'contact',   label:'Contact',       placeholder:'+91 98765 43210',  type:'text' },
+    { key:'address',   label:'Address',       placeholder:'City, State',      type:'text' },
+  ];
+
   return (
-    <div className="card">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-          <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-          </svg>
-        </div>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+
+      {/* Header */}
+      <div className="-mx-5 -mt-5 px-5 py-4 rounded-t-xl flex items-center gap-3"
+           style={{ background:'rgba(14,165,233,0.08)', borderBottom:'1px solid rgba(14,165,233,0.15)' }}>
+        <span className="text-xl">👤</span>
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">Patient Intake</h2>
-          <p className="text-sm text-gray-500">Register new patient with medical documents</p>
+          <div className="font-bold text-slate-800 text-sm">New Patient Registration</div>
+          <div className="text-xs text-slate-500">Fill in details and attach medical documents</div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Patient Name <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            placeholder="Enter full name"
-            className="input-field"
-            disabled={loading}
-          />
+      {error && (
+        <div className="px-4 py-3 rounded-lg text-sm flex items-center gap-2"
+             style={{ background:'rgba(239,68,68,0.08)', color:'#b91c1c', border:'1px solid rgba(239,68,68,0.2)' }}>
+          ⚠️ {error}
         </div>
+      )}
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Age <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="number"
-            name="age"
-            value={formData.age}
-            onChange={handleChange}
-            placeholder="Enter age"
-            min="0"
-            max="150"
-            className="input-field"
-            disabled={loading}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Medical Document <span className="text-red-500">*</span>
-          </label>
-          <div
-            className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-all ${
-              dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
-            }`}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-          >
+      {/* Text fields */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {fields.map(({ key, label, placeholder, type }) => (
+          <div key={key}>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">{label}</label>
             <input
-              type="file"
-              id="file-upload"
-              onChange={handleFileChange}
-              className="hidden"
-              accept=".pdf,.txt,.doc,.docx"
-              disabled={loading}
+              type={type}
+              className="input-field"
+              placeholder={placeholder}
+              value={form[key]}
+              onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
             />
-            
-            {formData.document ? (
-              <div className="flex items-center justify-center gap-3">
-                <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div className="text-left">
-                  <p className="text-sm font-medium text-gray-900">{formData.document.name}</p>
-                  <p className="text-xs text-gray-500">{(formData.document.size / 1024).toFixed(2)} KB</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setFormData((prev) => ({ ...prev, document: null }))}
-                  className="ml-auto text-red-500 hover:text-red-700"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+          </div>
+        ))}
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Gender</label>
+          <select className="input-field" value={form.gender}
+            onChange={e => setForm(p => ({ ...p, gender: e.target.value }))}>
+            <option value="">Select gender</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Blood Type</label>
+          <select className="input-field" value={form.bloodType}
+            onChange={e => setForm(p => ({ ...p, bloodType: e.target.value }))}>
+            <option value="">Select type</option>
+            {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Drag-drop zone */}
+      <div>
+        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Medical Documents</label>
+        <div
+          className={`dropzone ${dragOver ? 'drag-over' : ''}`}
+          onClick={() => fileRef.current?.click()}
+          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+        >
+          <span className="text-3xl block mb-2">📄</span>
+          <p className="text-sm font-medium text-slate-600">Drop files here or <span style={{ color:'#0ea5e9' }}>browse</span></p>
+          <p className="text-xs text-slate-400 mt-1">PDF, DOCX, JPG, PNG · Max 10MB each</p>
+          <input ref={fileRef} type="file" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+            className="hidden" onChange={e => handleFiles(e.target.files)} />
+        </div>
+
+        {/* File previews */}
+        {files.length > 0 && (
+          <div className="mt-3 flex flex-col gap-2">
+            {files.map((f, i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg"
+                   style={{ background:'#f0fdf4', border:'1px solid #bbf7d0' }}>
+                <span className="text-emerald-500">✓</span>
+                <span className="text-sm text-slate-700 truncate flex-1">{f.name}</span>
+                <span className="text-xs text-slate-400">{(f.size / 1024).toFixed(0)} KB</span>
+                <button type="button" onClick={() => setFiles(p => p.filter((_, j) => j !== i))}
+                  className="text-slate-400 hover:text-red-500 transition-colors"
+                  style={{ background:'none', border:'none', cursor:'pointer' }}>
+                  ×
                 </button>
               </div>
-            ) : (
-              <>
-                <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                  <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <div className="mt-4">
-                  <label htmlFor="file-upload" className="cursor-pointer">
-                    <span className="text-blue-600 hover:text-blue-700 font-medium">Upload a file</span>
-                    <span className="text-gray-500"> or drag and drop</span>
-                  </label>
-                  <p className="text-xs text-gray-500 mt-2">PDF, TXT, DOC up to 10MB</p>
-                </div>
-              </>
-            )}
+            ))}
           </div>
-        </div>
+        )}
+      </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="btn-primary w-full flex items-center justify-center gap-2"
-        >
-          {loading ? (
-            <>
-              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              Processing...
-            </>
-          ) : (
-            <>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Register Patient
-            </>
-          )}
-        </button>
-      </form>
-    </div>
+      <button
+        type="submit"
+        className="btn-primary justify-center py-3"
+        disabled={loading}
+        style={{ opacity: loading ? 0.7 : 1 }}
+      >
+        {loading ? <><span className="animate-spin">⟳</span> Registering…</> : '✓ Register Patient'}
+      </button>
+    </form>
   );
-};
-
-export default IntakeForm;
+}
