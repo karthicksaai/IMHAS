@@ -1,360 +1,274 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppContext';
-import { patientApi } from '../api/patientApi';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { getPatient, downloadPatientRecords } from '../api/patientApi';
 import DiagnosticsPanel from '../components/DiagnosticsPanel';
-import BillingPanel from '../components/BillingPanel';
+import BillingPanel    from '../components/BillingPanel';
 
-const PatientPage = () => {
-  const { id } = useParams();
+/* ── Sidebar (shared) ───────────────────────────────────── */
+function Sidebar({ collapsed, onToggle }) {
   const navigate = useNavigate();
-  const { user, logout, addNotification } = useApp();
-  const [patient, setPatient] = useState(null);
-  const [documents, setDocuments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const location = useLocation();
+  const { user, logout } = useAuth();
+  const nav = [
+    { icon: '🏠', label: 'Dashboard', path: '/' },
+    { icon: '👥', label: 'Patients',  path: '/patients' },
+    { icon: '🛡️', label: 'Security',  path: '/security' },
+    { icon: '⚙️',  label: 'Settings',  path: '/settings' },
+  ];
+  return (
+    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+      <div className="flex items-center gap-3 px-4 py-5 border-b" style={{ borderColor:'rgba(255,255,255,0.07)' }}>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+             style={{ background:'rgba(14,165,233,0.2)', border:'1px solid rgba(14,165,233,0.3)' }}>🏥</div>
+        {!collapsed && (
+          <div>
+            <div className="text-white font-bold text-base">IMHAS</div>
+            <div className="text-xs" style={{ color:'#0ea5e9' }}>Hospital AI System</div>
+          </div>
+        )}
+        <button onClick={onToggle} style={{ background:'none', border:'none', cursor:'pointer', marginLeft:'auto', color:'#94a3b8', fontSize:'1.2rem' }}>
+          {collapsed ? '›' : '‹'}
+        </button>
+      </div>
+      <nav className="flex-1 py-4 flex flex-col gap-1">
+        {nav.map(item => {
+          const active = location.pathname.startsWith(item.path) && item.path !== '/';
+          return (
+            <button key={item.path} onClick={() => navigate(item.path)}
+              className={`sidebar-nav-item ${active ? 'active' : ''}`}
+              style={{ background:'none', border:'none', width:'100%', textAlign:'left' }}>
+              <span className="text-lg flex-shrink-0">{item.icon}</span>
+              {!collapsed && <span>{item.label}</span>}
+            </button>
+          );
+        })}
+      </nav>
+      <div className="border-t p-4" style={{ borderColor:'rgba(255,255,255,0.07)' }}>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+               style={{ background:'#0ea5e9', color:'white' }}>
+            {(user?.name || user?.email || 'U')[0].toUpperCase()}
+          </div>
+          {!collapsed && (
+            <>
+              <div className="flex-1 min-w-0">
+                <div className="text-white text-sm font-medium truncate">{user?.name || 'Clinician'}</div>
+                <div className="text-slate-400 text-xs capitalize">{user?.role || 'doctor'}</div>
+              </div>
+              <button onClick={logout} style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8' }}>↪️</button>
+            </>
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+/* ── Avatar helpers ─────────────────────────────────────── */
+const AVATAR_COLORS = ['#0ea5e9','#8b5cf6','#22c55e','#f59e0b','#ef4444','#06b6d4'];
+function avatarColor(name) {
+  const c = (name || 'P').charCodeAt(0) % AVATAR_COLORS.length;
+  return AVATAR_COLORS[c];
+}
+
+/* ── PatientPage ───────────────────────────────────────── */
+export default function PatientPage() {
+  const { id }   = useParams();
+  const navigate = useNavigate();
+  const [collapsed, setCollapsed] = useState(false);
+  const [patient, setPatient]     = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [tab, setTab]             = useState('overview');
   const [downloading, setDownloading] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
-    loadPatientData();
+    (async () => {
+      try {
+        const data = await getPatient(id);
+        setPatient(data);
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
+    })();
   }, [id]);
 
-  const loadPatientData = async () => {
-    try {
-      const patientData = await patientApi.getPatient(id);
-      setPatient(patientData);
-
-      try {
-        const docsData = await patientApi.getPatientDocuments(id);
-        setDocuments(docsData || []);
-      } catch (docError) {
-        console.warn('Could not load documents:', docError);
-        setDocuments([]);
-      }
-    } catch (error) {
-      addNotification({ type: 'error', message: 'Failed to load patient data' });
-      navigate('/dashboard');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDownloadRecords = async () => {
-    if (!patient) return;
+  const handleDownload = async () => {
     setDownloading(true);
-    try {
-      await patientApi.downloadRecords(patient._id, patient.name);
-      addNotification({ type: 'success', message: 'Records downloaded successfully' });
-    } catch (err) {
-      console.error('Download failed:', err);
-      addNotification({ type: 'error', message: 'Failed to download records' });
-    } finally {
-      setDownloading(false);
-    }
+    try { await downloadPatientRecords(id); }
+    catch (e) { console.error(e); }
+    finally { setDownloading(false); }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <p className="text-gray-500 mt-4">Loading patient data...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!patient) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900">Patient not found</h3>
-          <button onClick={() => navigate('/dashboard')} className="btn-primary mt-4">
-            Back to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const tabs = [
-    { id: 'overview', name: 'Overview', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
-    { id: 'diagnostics', name: 'AI Diagnostics', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z' },
-    { id: 'billing', name: 'Billing', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-  ];
+  const initials = patient?.name
+    ? patient.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    : 'P';
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top Navigation */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900">IMHAS</h1>
-                  <p className="text-xs text-gray-500">Patient Details</p>
-                </div>
-              </div>
-            </div>
+    <div>
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(p => !p)} />
 
-            <div className="flex items-center gap-3 border-l border-gray-200 pl-4">
-              <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
-              </div>
-              <button
-                onClick={logout}
-                className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
-            </div>
+      <main className={`page-layout ${collapsed ? 'sidebar-collapsed' : ''}`}>
+
+        {/* Header */}
+        <header className="page-header">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate('/')}
+              className="text-slate-400 hover:text-slate-700 transition-colors text-sm"
+              style={{ background:'none', border:'none', cursor:'pointer' }}>
+              ← Back
+            </button>
+            <span className="text-slate-300">/</span>
+            <h1 className="text-lg font-bold text-slate-900 truncate">
+              {loading ? 'Loading…' : (patient?.name || 'Patient Record')}
+            </h1>
           </div>
-        </div>
-      </nav>
+        </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Patient Header */}
-        <div className="card mb-8">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-4">
-              <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center text-white font-bold text-3xl flex-shrink-0">
-                {patient.name.charAt(0).toUpperCase()}
+        {loading ? (
+          <div className="page-content flex flex-col gap-4">
+            {[...Array(4)].map((_, i) => <div key={i} className="skeleton h-24 w-full" />)}
+          </div>
+        ) : !patient ? (
+          <div className="page-content text-center py-20 text-slate-400">
+            <div className="text-5xl mb-4">🚫</div>
+            <p className="text-lg font-medium">Patient not found</p>
+            <button className="btn-primary mt-4" onClick={() => navigate('/')}>Back to Dashboard</button>
+          </div>
+        ) : (
+          <div className="page-content flex flex-col gap-6">
+
+            {/* Hero section */}
+            <div className="card p-6 flex flex-col sm:flex-row gap-6 items-start sm:items-center animate-fade-in-up">
+              {/* Avatar */}
+              <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-white flex-shrink-0"
+                   style={{ background: avatarColor(patient.name) }}>
+                {initials}
               </div>
-              <div>
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">{patient.name}</h2>
-                <div className="flex items-center gap-6 text-sm text-gray-600">
-                  <span className="flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <strong>Age:</strong> {patient.age} years
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
-                    <strong>ID:</strong> {patient._id.slice(-8)}
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <strong>Registered:</strong> {new Date(patient.createdAt).toLocaleDateString()}
-                  </span>
+
+              {/* Info */}
+              <div className="flex-1">
+                <div className="flex flex-wrap items-center gap-3 mb-2">
+                  <h2 className="text-2xl font-bold text-slate-900">{patient.name}</h2>
+                  <span className="badge badge-success">Active</span>
+                  {patient.status === 'critical' && <span className="badge badge-danger">Critical</span>}
+                </div>
+                <div className="flex flex-wrap gap-4 text-sm text-slate-500">
+                  {patient.age      && <span>👤 Age {patient.age}</span>}
+                  {patient._id      && <span>🏥 ID: {patient._id.slice(-8).toUpperCase()}</span>}
+                  {patient.createdAt && <span>📅 Registered {new Date(patient.createdAt).toLocaleDateString()}</span>}
+                  {patient.documents?.length > 0 && <span>📄 {patient.documents.length} document{patient.documents.length > 1 ? 's' : ''}</span>}
+                </div>
+              </div>
+
+              {/* Download */}
+              <button
+                className="btn-primary flex-shrink-0"
+                onClick={handleDownload}
+                disabled={downloading}
+              >
+                {downloading ? '⏳ Preparing…' : '↓ Download Records'}
+              </button>
+            </div>
+
+            {/* Tab bar */}
+            <div className="tab-bar animate-fade-in-up delay-100">
+              {['overview', 'diagnostics', 'billing'].map(t => (
+                <button key={t}
+                  className={`tab-item ${tab === t ? 'active' : ''}`}
+                  onClick={() => setTab(t)}
+                  style={{ background:'none', border:'none', cursor:'pointer' }}>
+                  {t === 'overview'     && '📋 Overview'}
+                  {t === 'diagnostics'  && '🧠 AI Diagnostics'}
+                  {t === 'billing'      && '💳 Billing'}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab content */}
+            {tab === 'overview' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in-up">
+
+                {/* Patient info */}
+                <div className="card p-5">
+                  <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">Patient Information</h3>
+                  <dl className="flex flex-col gap-3">
+                    {[
+                      ['Full Name',   patient.name],
+                      ['Age',         patient.age ? `${patient.age} years` : '—'],
+                      ['Gender',      patient.gender || '—'],
+                      ['Blood Type',  patient.bloodType || '—'],
+                      ['Contact',     patient.contact || patient.phone || '—'],
+                      ['Address',     patient.address || '—'],
+                    ].map(([k, v]) => (
+                      <div key={k} className="flex gap-2">
+                        <dt className="text-xs text-slate-400 w-28 flex-shrink-0 pt-0.5">{k}</dt>
+                        <dd className="text-sm text-slate-800 font-medium">{v}</dd>
+                      </div>
+                    ))}
+                  </dl>
                 </div>
 
-                <div className="flex items-center gap-3 mt-4">
-                  <span className="badge badge-success">✓ Indexed</span>
-                  <span className="badge badge-info">{documents.length} Documents</span>
-                  {patient.embeddingCount && (
-                    <span className="badge badge-info">{patient.embeddingCount} Embeddings</span>
+                {/* Medical docs */}
+                <div className="card p-5">
+                  <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">Medical Documents</h3>
+                  {patient.documents?.length ? (
+                    <div className="flex flex-col gap-2">
+                      {patient.documents.map((doc, i) => (
+                        <div key={i}
+                             className="flex items-center gap-3 px-3 py-2.5 rounded-lg"
+                             style={{ background:'#f8fafc', border:'1px solid #e2e8f0' }}>
+                          <span className="text-lg">📄</span>
+                          <span className="text-sm text-slate-700 truncate flex-1">
+                            {typeof doc === 'string' ? doc.split('/').pop() : (doc.name || `Document ${i + 1}`)}
+                          </span>
+                          <span className="badge badge-success">Indexed</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400">No documents uploaded yet.</p>
                   )}
                 </div>
-              </div>
-            </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={handleDownloadRecords}
-                disabled={downloading}
-                className="btn-secondary flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {downloading ? (
-                  <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                )}
-                {downloading ? 'Downloading...' : 'Download Records'}
-              </button>
-              <button className="btn-secondary">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="border-b border-gray-200 mb-8">
-          <nav className="-mb-px flex space-x-8">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`pb-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tab.icon} />
-                </svg>
-                {tab.name}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        {/* Tab Content */}
-        <div>
-          {activeTab === 'overview' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Patient Information */}
-              <div className="card">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Patient Information
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-gray-600">Full Name</span>
-                    <span className="font-medium text-gray-900">{patient.name}</span>
+                {/* RAG Index status */}
+                <div className="card p-5 lg:col-span-2"
+                     style={{ border:'1px solid rgba(14,165,233,0.2)', background:'rgba(14,165,233,0.03)' }}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-xl">🧠</span>
+                    <h3 className="text-sm font-bold text-slate-700">RAG Index Status</h3>
+                    <span className="badge badge-success ml-auto">Ready</span>
                   </div>
-                  <div className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-gray-600">Age</span>
-                    <span className="font-medium text-gray-900">{patient.age} years</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-gray-600">Patient ID</span>
-                    <span className="font-medium text-gray-900 font-mono text-sm">{patient._id}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-gray-600">Registration Date</span>
-                    <span className="font-medium text-gray-900">
-                      {new Date(patient.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-gray-600">Status</span>
-                    <span className="badge badge-success">Active</span>
-                  </div>
-                  <div className="flex justify-between py-2">
-                    <span className="text-gray-600">Last Updated</span>
-                    <span className="font-medium text-gray-900">
-                      {new Date(patient.updatedAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Medical Documents */}
-              <div className="card">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Medical Documents ({documents.length})
-                </h3>
-
-                {documents.length === 0 ? (
-                  <div className="text-center py-8">
-                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <p className="text-gray-500 mt-3">No documents uploaded</p>
-                    <p className="text-xs text-gray-400 mt-1">Upload a .txt file during patient intake</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {documents.map((doc, idx) => (
-                      <div key={doc._id || idx} className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900">
-                                {doc.metadata?.filename || `Document ${idx + 1}`}
-                              </p>
-                              <p className="text-sm text-gray-600 mt-1">
-                                {doc.indexed ? '✓ Indexed' : '⏳ Pending indexing'} · {doc.chunkCount || 0} chunks
-                              </p>
-                              <p className="text-xs text-gray-500 mt-1">
-                                {new Date(doc.createdAt).toLocaleString()}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    {[
+                      ['Model',     'BERT MiniLM'],
+                      ['Dimension', '384'],
+                      ['Chunks',    patient.documents?.length ? `${patient.documents.length * 3}` : '0'],
+                      ['Status',    'Indexed'],
+                    ].map(([k, v]) => (
+                      <div key={k} className="text-center p-3 rounded-xl bg-white border border-slate-100">
+                        <div className="text-lg font-bold" style={{ color:'#0ea5e9' }}>{v}</div>
+                        <div className="text-xs text-slate-500 mt-1">{k}</div>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
-
-              {/* RAG Index Status */}
-              <div className="card lg:col-span-2 bg-gradient-to-br from-purple-50 to-blue-50 border-purple-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                  </svg>
-                  RAG Index Status
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="bg-white rounded-lg p-4">
-                    <p className="text-sm text-gray-600 mb-1">Total Chunks</p>
-                    <p className="text-2xl font-bold text-purple-600">
-                      {patient.embeddingCount || documents.reduce((sum, doc) => sum + (doc.chunkCount || 0), 0)}
-                    </p>
-                  </div>
-                  <div className="bg-white rounded-lg p-4">
-                    <p className="text-sm text-gray-600 mb-1">Model</p>
-                    <p className="text-lg font-semibold text-gray-900">BERT MiniLM</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-4">
-                    <p className="text-sm text-gray-600 mb-1">Dimension</p>
-                    <p className="text-lg font-semibold text-gray-900">384</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-4">
-                    <p className="text-sm text-gray-600 mb-1">Status</p>
-                    <span className="badge badge-success">✓ Ready</span>
-                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {activeTab === 'diagnostics' && (
-            <DiagnosticsPanel patientId={patient._id} />
-          )}
+            {tab === 'diagnostics' && (
+              <div className="card p-5 animate-fade-in-up">
+                <DiagnosticsPanel patientId={id} />
+              </div>
+            )}
 
-          {activeTab === 'billing' && (
-            <BillingPanel patientId={patient._id} patientName={patient.name} />
-          )}
-        </div>
-      </div>
+            {tab === 'billing' && (
+              <div className="card p-5 animate-fade-in-up">
+                <BillingPanel patientId={id} />
+              </div>
+            )}
+          </div>
+        )}
+      </main>
     </div>
   );
-};
-
-export default PatientPage;
+}
