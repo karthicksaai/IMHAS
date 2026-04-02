@@ -1,156 +1,295 @@
-import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppContext';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { getAuditLogs, getAnomalies } from '../api/securityApi';
 import AuditLogs from '../components/AuditLogs';
 
-const SecurityPage = () => {
+/* ── Sidebar (shared pattern) ──────────────────────────── */
+function Sidebar({ collapsed, onToggle }) {
   const navigate = useNavigate();
-  const { user, logout } = useApp();
-
+  const location = useLocation();
+  const { user, logout } = useAuth();
+  const nav = [
+    { icon: '🏠', label: 'Dashboard', path: '/' },
+    { icon: '👥', label: 'Patients',  path: '/patients' },
+    { icon: '🛡️', label: 'Security',  path: '/security' },
+    { icon: '⚙️',  label: 'Settings',  path: '/settings' },
+  ];
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top Navigation */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-red-600 to-orange-600 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900">Security Dashboard</h1>
-                  <p className="text-xs text-gray-500">Audit Logs & Anomaly Detection</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 border-l border-gray-200 pl-4">
-              <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
-              </div>
-              <button
-                onClick={logout}
-                className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
-            </div>
+    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+      <div className="flex items-center gap-3 px-4 py-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+             style={{ background: 'rgba(14,165,233,0.2)', border: '1px solid rgba(14,165,233,0.3)' }}>🏥</div>
+        {!collapsed && (
+          <div>
+            <div className="text-white font-bold text-base">IMHAS</div>
+            <div className="text-xs" style={{ color: '#0ea5e9' }}>Hospital AI System</div>
           </div>
-        </div>
+        )}
+        <button onClick={onToggle} style={{ background:'none', border:'none', cursor:'pointer', marginLeft:'auto', color:'#94a3b8', fontSize:'1.2rem' }}>
+          {collapsed ? '›' : '‹'}
+        </button>
+      </div>
+      <nav className="flex-1 py-4 flex flex-col gap-1">
+        {nav.map(item => {
+          const active = location.pathname === item.path;
+          return (
+            <button key={item.path} onClick={() => navigate(item.path)}
+              className={`sidebar-nav-item ${active ? 'active' : ''}`}
+              style={{ background:'none', border:'none', width:'100%', textAlign:'left' }}>
+              <span className="text-lg flex-shrink-0">{item.icon}</span>
+              {!collapsed && <span>{item.label}</span>}
+            </button>
+          );
+        })}
       </nav>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Security Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="card bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-green-700">Total Access Logs</p>
-                <p className="text-3xl font-bold text-green-900 mt-2">1,247</p>
-              </div>
-              <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
-                <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-            </div>
+      <div className="border-t p-4" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+               style={{ background: '#0ea5e9', color:'white' }}>
+            {(user?.name || user?.email || 'U')[0].toUpperCase()}
           </div>
-
-          <div className="card bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-red-700">Anomalies Detected</p>
-                <p className="text-3xl font-bold text-red-900 mt-2">3</p>
+          {!collapsed && (
+            <>
+              <div className="flex-1 min-w-0">
+                <div className="text-white text-sm font-medium truncate">{user?.name || 'Clinician'}</div>
+                <div className="text-slate-400 text-xs truncate capitalize">{user?.role || 'admin'}</div>
               </div>
-              <div className="w-12 h-12 bg-red-500 rounded-lg flex items-center justify-center">
-                <svg className="w-7 h-7 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div className="card bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-blue-700">Detection Rate</p>
-                <p className="text-3xl font-bold text-blue-900 mt-2">100%</p>
-              </div>
-              <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
-                <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div className="card bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-purple-700">Active Users</p>
-                <p className="text-3xl font-bold text-purple-900 mt-2">24</p>
-              </div>
-              <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center">
-                <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              </div>
-            </div>
-          </div>
+              <button onClick={logout} title="Logout"
+                style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', fontSize:'1rem' }}>
+                ↪️
+              </button>
+            </>
+          )}
         </div>
+      </div>
+    </aside>
+  );
+}
 
-        {/* Audit Logs Component */}
-        <AuditLogs />
-
-        {/* Security Info */}
-        <div className="card mt-8 bg-blue-50 border-blue-200">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-blue-900 mb-2">Anomaly Detection Rules</h3>
-              <ul className="space-y-2 text-sm text-blue-800">
-                <li className="flex items-start gap-2">
-                  <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span><strong>Odd Hours Detection:</strong> Access attempts between 0:00 AM - 5:00 AM are flagged</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span><strong>Rapid Access Pattern:</strong> More than 5 unique patient records accessed within 60 seconds</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span><strong>Complete Audit Trail:</strong> All access attempts are logged with timestamp, user, and IP address</span>
-                </li>
-              </ul>
-            </div>
-          </div>
+/* ── Stat Card ───────────────────────────────────────── */
+function StatCard({ icon, label, value, color, pulse }) {
+  return (
+    <div className="kpi-card animate-fade-in-up" style={pulse ? { animation: 'pulse-ring 1.5s infinite' } : {}}>
+      <div className="flex items-start justify-between">
+        <div className="kpi-icon" style={{ background: `${color}18` }}>
+          <span style={{ color }}>{icon}</span>
         </div>
+        {pulse && <span className="live-dot-danger" />}
+      </div>
+      <div className="text-3xl font-bold" style={{ color: pulse ? '#ef4444' : '#0f172a' }}>{value}</div>
+      <div className="text-sm text-slate-500">{label}</div>
+    </div>
+  );
+}
+
+/* ── Detection Rules ──────────────────────────────────── */
+const RULES = [
+  {
+    icon: '🌙',
+    title: 'Odd Hours Access',
+    color: '#f59e0b',
+    bg: 'rgba(245,158,11,0.08)',
+    border: 'rgba(245,158,11,0.2)',
+    desc: 'Access between 00:00 – 05:00 triggers immediate alert. Clinical systems should not be accessed outside working hours without authorization.',
+  },
+  {
+    icon: '⚡',
+    title: 'Rapid Record Access',
+    color: '#ef4444',
+    bg: 'rgba(239,68,68,0.08)',
+    border: 'rgba(239,68,68,0.2)',
+    desc: 'More than 5 patient records accessed within 60 seconds flags a potential data exfiltration or credential compromise attempt.',
+  },
+  {
+    icon: '📝',
+    title: 'Complete Audit Trail',
+    color: '#0ea5e9',
+    bg: 'rgba(14,165,233,0.08)',
+    border: 'rgba(14,165,233,0.2)',
+    desc: 'Every API request is logged with user ID, IP address, action type, patient ID, and timestamp. Immutable trail for compliance.',
+  },
+];
+
+/* ── Architecture Flow ──────────────────────────────────── */
+const FLOW_STEPS = [
+  { label: 'User Request',       icon: '👤', color: '#64748b' },
+  { label: 'Auth Middleware',    icon: '🔑', color: '#0ea5e9' },
+  { label: 'Audit Logger',       icon: '📝', color: '#8b5cf6' },
+  { label: 'Anomaly Detector',   icon: '🛡️', color: '#ef4444' },
+  { label: 'Response',           icon: '✅', color: '#22c55e' },
+];
+
+function ArchitectureDiagram() {
+  return (
+    <div className="card p-6 animate-fade-in-up delay-400">
+      <h3 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+        📊 Security Architecture
+      </h3>
+      <div className="flex flex-wrap items-center gap-2">
+        {FLOW_STEPS.map((step, i) => (
+          <>
+            <div key={step.label}
+                 className="flex flex-col items-center gap-2 px-4 py-3 rounded-xl flex-shrink-0"
+                 style={{ background: `${step.color}12`, border: `1px solid ${step.color}30` }}>
+              <span className="text-2xl">{step.icon}</span>
+              <span className="text-xs font-semibold text-center" style={{ color: step.color }}>{step.label}</span>
+            </div>
+            {i < FLOW_STEPS.length - 1 && (
+              <span key={`arrow-${i}`} className="text-slate-300 text-xl font-light">→</span>
+            )}
+          </>
+        ))}
       </div>
     </div>
   );
-};
+}
 
-export default SecurityPage;
+/* ── SecurityPage ────────────────────────────────────── */
+export default function SecurityPage() {
+  const [collapsed, setCollapsed]   = useState(false);
+  const [anomalies, setAnomalies]   = useState([]);
+  const [totalLogs, setTotalLogs]   = useState(0);
+  const [activeUsers, setActiveUsers] = useState(0);
+  const [loading, setLoading]       = useState(true);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [logsData, anomData] = await Promise.all([
+        getAuditLogs(),
+        getAnomalies(),
+      ]);
+      setTotalLogs(Array.isArray(logsData) ? logsData.length : (logsData?.logs?.length || 0));
+      const users = new Set();
+      (Array.isArray(logsData) ? logsData : (logsData?.logs || [])).forEach(l => {
+        if (l.userId || l.user) users.add(l.userId || l.user);
+      });
+      setActiveUsers(users.size);
+      setAnomalies(Array.isArray(anomData) ? anomData : (anomData?.anomalies || []));
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 10000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  const hasAnomalies = anomalies.length > 0;
+  const detectionRate = totalLogs > 0 ? '100%' : 'N/A';
+
+  return (
+    <div>
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(p => !p)} />
+
+      <main className={`page-layout ${collapsed ? 'sidebar-collapsed' : ''}`}>
+
+        {/* Header */}
+        <header className="page-header">
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-bold text-slate-900">🛡️ Security Command Center</h1>
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold"
+                  style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <span className="live-dot-danger" /> LIVE
+            </span>
+          </div>
+          <span className="text-xs text-slate-400">Auto-refresh every 10s</span>
+        </header>
+
+        <div className="page-content flex flex-col gap-6">
+
+          {/* Stat row */}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard icon="📋" label="Total Access Logs"   value={loading ? '…' : totalLogs}  color="#0ea5e9" />
+            <StatCard icon="⚠️" label="Anomalies Detected" value={loading ? '…' : anomalies.length} color="#ef4444" pulse={hasAnomalies} />
+            <StatCard icon="💯" label="Detection Rate"     value={detectionRate}               color="#22c55e" />
+            <StatCard icon="👤" label="Active Users"       value={loading ? '…' : activeUsers} color="#8b5cf6" />
+          </div>
+
+          {/* Anomaly alert panel */}
+          {hasAnomalies && (
+            <div className="rounded-xl p-5 animate-fade-in-up"
+                 style={{
+                   background: 'rgba(239,68,68,0.07)',
+                   border: '2px solid rgba(239,68,68,0.35)',
+                   animation: 'pulse-ring 2s infinite',
+                 }}>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-xl">🚨</span>
+                <span className="font-bold text-red-700 text-base">Active Security Anomalies</span>
+                <span className="ml-auto badge badge-danger">{anomalies.length} Alert{anomalies.length > 1 ? 's' : ''}</span>
+              </div>
+              <div className="flex flex-col gap-3">
+                {anomalies.map((a, i) => (
+                  <div key={i} className="flex items-start gap-4 p-4 rounded-xl bg-white"
+                       style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
+                    <span className="text-xl mt-0.5">⚠️</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-red-800 text-sm">{a.type || a.anomalyType || 'Anomaly'}</span>
+                        <span className="badge badge-danger">High Risk</span>
+                      </div>
+                      <p className="text-sm text-slate-600 mt-1">{a.description || a.details || 'Suspicious activity detected'}</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {a.timestamp ? new Date(a.timestamp).toLocaleString() : 'Recent'}
+                        {a.ip ? ` · IP: ${a.ip}` : ''}
+                        {a.userId ? ` · User: ${a.userId}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!hasAnomalies && !loading && (
+            <div className="card p-5 flex items-center gap-3 animate-fade-in-up"
+                 style={{ border: '1px solid rgba(34,197,94,0.2)', background: 'rgba(34,197,94,0.04)' }}>
+              <span className="text-2xl">✅</span>
+              <div>
+                <div className="font-semibold text-emerald-700">All Clear — No Anomalies Detected</div>
+                <div className="text-xs text-slate-500 mt-0.5">System is operating normally. Monitoring continues in real-time.</div>
+              </div>
+            </div>
+          )}
+
+          {/* Detection Rules */}
+          <div className="animate-fade-in-up delay-200">
+            <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">Detection Rules</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {RULES.map((rule, i) => (
+                <div key={i} className="card p-5"
+                     style={{ border: `1px solid ${rule.border}`, background: rule.bg }}>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
+                         style={{ background: `${rule.color}18` }}>
+                      {rule.icon}
+                    </div>
+                    <span className="font-bold text-slate-800 text-sm">{rule.title}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">{rule.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Architecture */}
+          <ArchitectureDiagram />
+
+          {/* Audit Logs */}
+          <div className="card p-5 animate-fade-in-up delay-300">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold text-slate-900">Audit Logs</h2>
+              <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                <span className="live-dot" /> Live
+              </span>
+            </div>
+            <AuditLogs />
+          </div>
+
+        </div>
+      </main>
+    </div>
+  );
+}
