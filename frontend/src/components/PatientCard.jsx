@@ -1,80 +1,58 @@
 import { useNavigate } from 'react-router-dom';
 
-const PatientCard = ({ patient }) => {
+const AVATAR_COLORS = ['#0ea5e9','#8b5cf6','#22c55e','#f59e0b','#ef4444','#06b6d4'];
+function avatarColor(name) {
+  return AVATAR_COLORS[(name || 'P').charCodeAt(0) % AVATAR_COLORS.length];
+}
+
+export default function PatientCard({ patient }) {
   const navigate = useNavigate();
-
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      indexed: { class: 'badge-success', text: 'Indexed' },
-      processing: { class: 'badge-warning', text: 'Processing' },
-      pending: { class: 'badge-info', text: 'Pending' },
-      error: { class: 'badge-error', text: 'Error' },
-    };
-    return statusConfig[status] || statusConfig.pending;
-  };
-
-  const status = getStatusBadge(patient.status || 'indexed');
+  const initials = patient.name
+    ? patient.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    : 'P';
+  const color = avatarColor(patient.name);
 
   return (
     <div
-      onClick={() => navigate(`/patient/${patient._id}`)}
-      className="card hover:shadow-md transition-shadow cursor-pointer group"
+      onClick={() => navigate(`/patients/${patient._id}`)}
+      className="flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition-all group"
+      style={{ background:'white', border:'1px solid #e2e8f0' }}
+      onMouseEnter={e => {
+        e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)';
+        e.currentTarget.style.borderLeft = `3px solid ${color}`;
+        e.currentTarget.style.transform  = 'translateY(-1px)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.boxShadow = 'none';
+        e.currentTarget.style.borderLeft = '1px solid #e2e8f0';
+        e.currentTarget.style.transform  = 'translateY(0)';
+      }}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-4 flex-1">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-lg flex-shrink-0">
-            {patient.name.charAt(0).toUpperCase()}
-          </div>
-          
-          <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-              {patient.name}
-            </h3>
-            <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
-              <span className="flex items-center gap-1">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                Age: {patient.age}
-              </span>
-              <span className="flex items-center gap-1">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                {patient.documentCount || 0} docs
-              </span>
-            </div>
-            
-            {patient.lastDiagnostic && (
-              <p className="text-xs text-gray-500 mt-2 truncate">
-                Last diagnostic: {new Date(patient.lastDiagnostic).toLocaleDateString()}
-              </p>
-            )}
-          </div>
-        </div>
+      <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+           style={{ background: color }}>
+        {initials}
+      </div>
 
-        <div className="flex flex-col items-end gap-2">
-          <span className={`badge ${status.class}`}>{status.text}</span>
-          <span className="text-xs text-gray-400">
-            ID: {patient._id.slice(-6)}
-          </span>
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-slate-900 text-sm truncate">{patient.name}</div>
+        <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+          {patient.age && <span>Age {patient.age}</span>}
+          {patient.age && patient._id && <span>·</span>}
+          {patient._id && <span className="font-mono">{patient._id.slice(-6).toUpperCase()}</span>}
+          {patient.documents?.length > 0 && (
+            <><span>·</span><span>📄 {patient.documents.length} doc{patient.documents.length>1?'s':''}</span></>
+          )}
         </div>
       </div>
 
-      <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          {new Date(patient.createdAt).toLocaleString()}
-        </div>
-        
-        <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
+      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+        <span className="badge badge-success text-xs">Active</span>
+        {patient.createdAt && (
+          <span className="text-xs text-slate-400">{new Date(patient.createdAt).toLocaleDateString()}</span>
+        )}
       </div>
+
+      <span className="text-slate-300 group-hover:text-slate-500 transition-colors ml-1">›</span>
     </div>
   );
-};
-
-export default PatientCard;
+}
