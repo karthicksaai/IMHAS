@@ -12,10 +12,10 @@ function Sidebar({ collapsed, onToggle }) {
   const { user, logout } = useAuth();
 
   const nav = [
-    { icon: '🏠', label: 'Dashboard', path: '/' },
-    { icon: '👥', label: 'Patients',  path: '/patients' },
-    { icon: '🛡️', label: 'Security',  path: '/security' },
-    { icon: '⚙️',  label: 'Settings',  path: '/settings' },
+    { icon: '', label: 'Dashboard', path: '/' },
+    { icon: '', label: 'Patients',  path: '/patients' },
+    { icon: '', label: 'Security',  path: '/security' },
+    { icon: '',  label: 'Settings',  path: '/settings' },
   ];
 
   return (
@@ -24,7 +24,7 @@ function Sidebar({ collapsed, onToggle }) {
       <div className="flex items-center gap-3 px-4 py-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
         <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
              style={{ background: 'rgba(14,165,233,0.2)', border: '1px solid rgba(14,165,233,0.3)' }}>
-          🏥
+          
         </div>
         {!collapsed && (
           <div>
@@ -81,7 +81,7 @@ function Sidebar({ collapsed, onToggle }) {
               title="Logout"
               style={{ background: 'none', border: 'none', cursor: 'pointer' }}
             >
-              ↪️
+              ↪
             </button>
           )}
         </div>
@@ -156,10 +156,10 @@ export default function DashboardPage() {
   );
 
   const kpis = [
-    { icon: '👥', label: 'Total Patients',        value: patients.length,  iconBg: 'rgba(14,165,233,0.1)',  trend: 12 },
-    { icon: '📄', label: 'Indexed Today',         value: Math.ceil(patients.length * 0.7), iconBg: 'rgba(34,197,94,0.1)',  trend: 5 },
-    { icon: '🧠', label: 'AI Diagnostics Today',  value: Math.ceil(patients.length * 0.4), iconBg: 'rgba(168,85,247,0.1)', trend: 8 },
-    { icon: '⏱️',  label: 'Avg Processing Time',  value: '1.2s',           iconBg: 'rgba(245,158,11,0.1)', trend: -3 },
+    { icon: '', label: 'Total Patients',        value: patients.length,  iconBg: 'rgba(14,165,233,0.1)',  trend: 12 },
+    { icon: '', label: 'Indexed Today',         value: Math.ceil(patients.length * 0.7), iconBg: 'rgba(34,197,94,0.1)',  trend: 5 },
+    { icon: '', label: 'AI Diagnostics Today',  value: Math.ceil(patients.length * 0.4), iconBg: 'rgba(168,85,247,0.1)', trend: 8 },
+    { icon: '⏱',  label: 'Avg Processing Time',  value: '1.2s',           iconBg: 'rgba(245,158,11,0.1)', trend: -3 },
   ];
 
   return (
@@ -173,7 +173,7 @@ export default function DashboardPage() {
           <h1 className="text-lg font-bold text-slate-900">Dashboard</h1>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></span>
               <input
                 className="input-field pl-9 w-64"
                 placeholder="Search patients…"
@@ -183,7 +183,7 @@ export default function DashboardPage() {
             </div>
             <button className="relative text-slate-500 hover:text-slate-800 text-xl"
                     style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-              🔔
+              
               <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" />
             </button>
           </div>
@@ -212,7 +212,7 @@ export default function DashboardPage() {
                   className="btn-primary w-full justify-center"
                   onClick={() => setShowForm(p => !p)}
                 >
-                  {showForm ? '✕ Cancel' : '+ New Patient'}
+                  {showForm ? ' Cancel' : '+ New Patient'}
                 </button>
               </div>
 
@@ -238,7 +238,7 @@ export default function DashboardPage() {
                 </div>
               ) : filtered.length === 0 ? (
                 <div className="text-center py-12 text-slate-400">
-                  <div className="text-4xl mb-3">👥</div>
+                  <div className="text-4xl mb-3"></div>
                   <p className="font-medium">No patients found</p>
                   <p className="text-sm mt-1">Register a patient to get started</p>
                 </div>

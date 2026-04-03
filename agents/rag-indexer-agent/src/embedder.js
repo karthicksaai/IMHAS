@@ -2,7 +2,7 @@ import { embedText } from "../../../shared/services/geminiEmbedder.js";
 
 export async function embedChunks(chunks) {
   const vectors = [];
-  console.log(`Embedding ${chunks.length} chunks via Gemini text-embedding-004...`);
+  console.log(`Embedding ${chunks.length} chunks via Gemini gemini-embedding-001...`);
 
   for (let i = 0; i < chunks.length; i++) {
     try {

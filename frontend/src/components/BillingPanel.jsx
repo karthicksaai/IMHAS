@@ -38,9 +38,9 @@ const BillingPanel = ({ patientId, patientName }) => {
       if (result.drugInteractionWarnings?.length > 0) {
         setDrugWarnings(result.drugInteractionWarnings);
         if (result.hasCriticalInteractions) {
-          addNotification({ type: 'error', message: '🚨 Critical drug interactions detected — review required before proceeding' });
+          addNotification({ type: 'error', message: ' Critical drug interactions detected — review required before proceeding' });
         } else {
-          addNotification({ type: 'error', message: '⚠️ Drug interaction warnings found — see details below' });
+          addNotification({ type: 'error', message: ' Drug interaction warnings found — see details below' });
         }
       }
 
@@ -118,7 +118,7 @@ const BillingPanel = ({ patientId, patientName }) => {
       {drugWarnings.length > 0 && (
         <div className="card bg-red-50 border-2 border-red-400">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-2xl">🚨</span>
+            <span className="text-2xl"></span>
             <h4 className="font-bold text-red-800">Drug Interaction Warning</h4>
           </div>
           <p className="text-sm text-red-700 mb-3">The following conflicts were detected between proposed treatments and this patient’s existing medications. Review before approving any billing proposal.</p>
@@ -157,7 +157,7 @@ const BillingPanel = ({ patientId, patientName }) => {
                     p.approvalStatus === 'rejected' ? 'bg-red-100 text-red-800 border-red-200' :
                     'bg-yellow-100 text-yellow-800 border-yellow-200'
                   }`}>
-                    {p.approvalStatus === 'approved' ? '✅ Approved' : p.approvalStatus === 'rejected' ? '❌ Rejected' : '⏳ Pending Review'}
+                    {p.approvalStatus === 'approved' ? ' Approved' : p.approvalStatus === 'rejected' ? ' Rejected' : '⏳ Pending Review'}
                   </span>
                 </div>
                 <span className="text-xs text-gray-500">{new Date(p.createdAt).toLocaleString()}</span>
@@ -189,8 +189,8 @@ const BillingPanel = ({ patientId, patientName }) => {
                     <div className="space-y-3">
                       <textarea value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} placeholder="Optional review note" className="input-field text-sm min-h-[60px] resize-none" />
                       <div className="flex gap-3">
-                        <button onClick={() => handleReview(p._id, 'approved')} className="flex-1 py-2 px-4 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 text-sm">✅ Approve Billing Plan</button>
-                        <button onClick={() => handleReview(p._id, 'rejected')} className="flex-1 py-2 px-4 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 text-sm">❌ Reject</button>
+                        <button onClick={() => handleReview(p._id, 'approved')} className="flex-1 py-2 px-4 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 text-sm"> Approve Billing Plan</button>
+                        <button onClick={() => handleReview(p._id, 'rejected')} className="flex-1 py-2 px-4 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 text-sm"> Reject</button>
                         <button onClick={() => setReviewingId(null)} className="px-4 py-2 text-gray-600 border rounded-lg text-sm">Cancel</button>
                       </div>
                     </div>

@@ -10,16 +10,16 @@ function Sidebar({ collapsed, onToggle }) {
   const location = useLocation();
   const { user, logout } = useAuth();
   const nav = [
-    { icon: '🏠', label: 'Dashboard', path: '/' },
-    { icon: '👥', label: 'Patients',  path: '/patients' },
-    { icon: '🛡️', label: 'Security',  path: '/security' },
-    { icon: '⚙️',  label: 'Settings',  path: '/settings' },
+    { icon: '', label: 'Dashboard', path: '/' },
+    { icon: '', label: 'Patients',  path: '/patients' },
+    { icon: '', label: 'Security',  path: '/security' },
+    { icon: '',  label: 'Settings',  path: '/settings' },
   ];
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div className="flex items-center gap-3 px-4 py-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
         <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-             style={{ background: 'rgba(14,165,233,0.2)', border: '1px solid rgba(14,165,233,0.3)' }}>🏥</div>
+             style={{ background: 'rgba(14,165,233,0.2)', border: '1px solid rgba(14,165,233,0.3)' }}></div>
         {!collapsed && (
           <div>
             <div className="text-white font-bold text-base">IMHAS</div>
@@ -57,7 +57,7 @@ function Sidebar({ collapsed, onToggle }) {
               </div>
               <button onClick={logout} title="Logout"
                 style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', fontSize:'1rem' }}>
-                ↪️
+                ↪
               </button>
             </>
           )}
@@ -86,7 +86,7 @@ function StatCard({ icon, label, value, color, pulse }) {
 /* ── Detection Rules ──────────────────────────────────── */
 const RULES = [
   {
-    icon: '🌙',
+    icon: '',
     title: 'Odd Hours Access',
     color: '#f59e0b',
     bg: 'rgba(245,158,11,0.08)',
@@ -94,7 +94,7 @@ const RULES = [
     desc: 'Access between 00:00 – 05:00 triggers immediate alert. Clinical systems should not be accessed outside working hours without authorization.',
   },
   {
-    icon: '⚡',
+    icon: '',
     title: 'Rapid Record Access',
     color: '#ef4444',
     bg: 'rgba(239,68,68,0.08)',
@@ -102,7 +102,7 @@ const RULES = [
     desc: 'More than 5 patient records accessed within 60 seconds flags a potential data exfiltration or credential compromise attempt.',
   },
   {
-    icon: '📝',
+    icon: '',
     title: 'Complete Audit Trail',
     color: '#0ea5e9',
     bg: 'rgba(14,165,233,0.08)',
@@ -113,18 +113,18 @@ const RULES = [
 
 /* ── Architecture Flow ──────────────────────────────────── */
 const FLOW_STEPS = [
-  { label: 'User Request',       icon: '👤', color: '#64748b' },
-  { label: 'Auth Middleware',    icon: '🔑', color: '#0ea5e9' },
-  { label: 'Audit Logger',       icon: '📝', color: '#8b5cf6' },
-  { label: 'Anomaly Detector',   icon: '🛡️', color: '#ef4444' },
-  { label: 'Response',           icon: '✅', color: '#22c55e' },
+  { label: 'User Request',       icon: '', color: '#64748b' },
+  { label: 'Auth Middleware',    icon: '', color: '#0ea5e9' },
+  { label: 'Audit Logger',       icon: '', color: '#8b5cf6' },
+  { label: 'Anomaly Detector',   icon: '', color: '#ef4444' },
+  { label: 'Response',           icon: '', color: '#22c55e' },
 ];
 
 function ArchitectureDiagram() {
   return (
     <div className="card p-6 animate-fade-in-up delay-400">
       <h3 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-        📊 Security Architecture
+         Security Architecture
       </h3>
       <div className="flex flex-wrap items-center gap-2">
         {FLOW_STEPS.map((step, i) => (
@@ -188,7 +188,7 @@ export default function SecurityPage() {
         {/* Header */}
         <header className="page-header">
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-bold text-slate-900">🛡️ Security Command Center</h1>
+            <h1 className="text-lg font-bold text-slate-900"> Security Command Center</h1>
             <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold"
                   style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
               <span className="live-dot-danger" /> LIVE
@@ -201,10 +201,10 @@ export default function SecurityPage() {
 
           {/* Stat row */}
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-            <StatCard icon="📋" label="Total Access Logs"   value={loading ? '…' : totalLogs}  color="#0ea5e9" />
-            <StatCard icon="⚠️" label="Anomalies Detected" value={loading ? '…' : anomalies.length} color="#ef4444" pulse={hasAnomalies} />
-            <StatCard icon="💯" label="Detection Rate"     value={detectionRate}               color="#22c55e" />
-            <StatCard icon="👤" label="Active Users"       value={loading ? '…' : activeUsers} color="#8b5cf6" />
+            <StatCard icon="" label="Total Access Logs"   value={loading ? '…' : totalLogs}  color="#0ea5e9" />
+            <StatCard icon="" label="Anomalies Detected" value={loading ? '…' : anomalies.length} color="#ef4444" pulse={hasAnomalies} />
+            <StatCard icon="" label="Detection Rate"     value={detectionRate}               color="#22c55e" />
+            <StatCard icon="" label="Active Users"       value={loading ? '…' : activeUsers} color="#8b5cf6" />
           </div>
 
           {/* Anomaly alert panel */}
@@ -216,7 +216,7 @@ export default function SecurityPage() {
                    animation: 'pulse-ring 2s infinite',
                  }}>
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-xl">🚨</span>
+                <span className="text-xl"></span>
                 <span className="font-bold text-red-700 text-base">Active Security Anomalies</span>
                 <span className="ml-auto badge badge-danger">{anomalies.length} Alert{anomalies.length > 1 ? 's' : ''}</span>
               </div>
@@ -224,7 +224,7 @@ export default function SecurityPage() {
                 {anomalies.map((a, i) => (
                   <div key={i} className="flex items-start gap-4 p-4 rounded-xl bg-white"
                        style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
-                    <span className="text-xl mt-0.5">⚠️</span>
+                    <span className="text-xl mt-0.5"></span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-red-800 text-sm">{a.type || a.anomalyType || 'Anomaly'}</span>
@@ -246,7 +246,7 @@ export default function SecurityPage() {
           {!hasAnomalies && !loading && (
             <div className="card p-5 flex items-center gap-3 animate-fade-in-up"
                  style={{ border: '1px solid rgba(34,197,94,0.2)', background: 'rgba(34,197,94,0.04)' }}>
-              <span className="text-2xl">✅</span>
+              <span className="text-2xl"></span>
               <div>
                 <div className="font-semibold text-emerald-700">All Clear — No Anomalies Detected</div>
                 <div className="text-xs text-slate-500 mt-0.5">System is operating normally. Monitoring continues in real-time.</div>

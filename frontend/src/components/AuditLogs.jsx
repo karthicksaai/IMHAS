@@ -75,7 +75,7 @@ export default function AuditLogs() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-10 text-slate-400">
-          <div className="text-3xl mb-2">📋</div>
+          <div className="text-3xl mb-2"></div>
           <p className="font-medium">No logs found</p>
         </div>
       ) : (
@@ -113,9 +113,9 @@ export default function AuditLogs() {
                     </td>
                     <td>
                       {isAnomaly ? (
-                        <span className="badge badge-danger">⚠️ Anomaly</span>
+                        <span className="badge badge-danger"> Anomaly</span>
                       ) : (
-                        <span className="badge badge-success">✓ Normal</span>
+                        <span className="badge badge-success"> Normal</span>
                       )}
                     </td>
                   </tr>

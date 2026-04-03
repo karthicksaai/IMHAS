@@ -40,7 +40,7 @@ export default function PatientCard({ patient }) {
           {patient.age && patient._id && <span>·</span>}
           {patient._id && <span className="font-mono">{patient._id.slice(-6).toUpperCase()}</span>}
           {patient.documents?.length > 0 && (
-            <><span>·</span><span>📄 {patient.documents.length} doc{patient.documents.length>1?'s':''}</span></>
+            <><span>·</span><span> {patient.documents.length} doc{patient.documents.length>1?'s':''}</span></>
           )}
         </div>
       </div>

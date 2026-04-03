@@ -26,7 +26,7 @@ const ApprovalBadge = ({ status }) => {
     approved: 'bg-green-100 text-green-800 border-green-200',
     rejected: 'bg-red-100 text-red-800 border-red-200',
   };
-  const labels = { pending_review: '⏳ Awaiting Doctor Review', approved: '✅ Approved', rejected: '❌ Rejected' };
+  const labels = { pending_review: '⏳ Awaiting Doctor Review', approved: ' Approved', rejected: ' Rejected' };
   return (
     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${map[status] || map.pending_review}`}>
       {labels[status] || 'Pending'}
@@ -143,7 +143,7 @@ const DiagnosticsPanel = ({ patientId }) => {
         {drugCheckResult && (
           <div className={`mt-4 p-4 rounded-lg border-2 ${drugCheckResult.safe ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-400'}`}>
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">{drugCheckResult.safe ? '✅' : '🚨'}</span>
+              <span className="text-lg">{drugCheckResult.safe ? '' : ''}</span>
               <p className={`font-bold ${drugCheckResult.safe ? 'text-green-800' : 'text-red-800'}`}>
                 {drugCheckResult.message}
               </p>
@@ -190,7 +190,7 @@ const DiagnosticsPanel = ({ patientId }) => {
           </div>
         </div>
         <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
-          ⚠️ <strong>Human-in-the-Loop:</strong> All AI responses require doctor approval before becoming part of the official patient record. Responses below {CONFIDENCE_THRESHOLD}% confidence are automatically rejected.
+           <strong>Human-in-the-Loop:</strong> All AI responses require doctor approval before becoming part of the official patient record. Responses below {CONFIDENCE_THRESHOLD}% confidence are automatically rejected.
         </div>
         <form onSubmit={handleSubmit}>
           <textarea
@@ -201,7 +201,7 @@ const DiagnosticsPanel = ({ patientId }) => {
             disabled={loading}
           />
           <div className="flex items-center justify-between mt-4">
-            <p className="text-xs text-gray-500">Powered by RAG + BERT MiniLM + Gemini 2.0</p>
+            <p className="text-xs text-gray-500">Powered by RAG + Gemini gemini-embedding-001</p>
             <button type="submit" disabled={loading || !question.trim()} className="btn-primary flex items-center gap-2">
               {loading ? (
                 <><svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>Analyzing...</>
@@ -250,7 +250,7 @@ const DiagnosticsPanel = ({ patientId }) => {
               {d.rejected ? (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <div className="flex items-start gap-2">
-                    <span className="text-red-500 text-lg">❌</span>
+                    <span className="text-red-500 text-lg"></span>
                     <div>
                       <p className="font-semibold text-red-800 text-sm">AI Response Rejected — Insufficient Evidence</p>
                       <p className="text-red-700 text-sm mt-1">{d.rejectionReason}</p>
@@ -272,7 +272,7 @@ const DiagnosticsPanel = ({ patientId }) => {
                     <details className="group mb-3">
                       <summary className="cursor-pointer text-sm font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-2">
                         <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                        📚 View Source Evidence ({d.retrievedChunks.length} passages from patient’s documents)
+                         View Source Evidence ({d.retrievedChunks.length} passages from patient’s documents)
                       </summary>
                       <div className="mt-3 space-y-2 pl-4 border-l-2 border-blue-200">
                         {d.retrievedChunks.map((chunk, idx) => (
@@ -307,13 +307,13 @@ const DiagnosticsPanel = ({ patientId }) => {
                               onClick={() => handleReview(d._id, 'approved')}
                               className="flex-1 py-2 px-4 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors text-sm flex items-center justify-center gap-2"
                             >
-                              ✅ Approve — Add to Official Record
+                               Approve — Add to Official Record
                             </button>
                             <button
                               onClick={() => handleReview(d._id, 'rejected')}
                               className="flex-1 py-2 px-4 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors text-sm flex items-center justify-center gap-2"
                             >
-                              ❌ Reject — Do Not Use
+                               Reject — Do Not Use
                             </button>
                             <button onClick={() => setReviewingId(null)} className="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50 text-sm">
                               Cancel
@@ -332,7 +332,7 @@ const DiagnosticsPanel = ({ patientId }) => {
                             onClick={() => handleSecondOpinion(d._id)}
                             className="px-4 py-2 border-2 border-blue-500 text-blue-600 rounded-lg font-semibold hover:bg-blue-50 text-sm flex items-center gap-2"
                           >
-                            🔍 Request Second Opinion
+                             Request Second Opinion
                           </button>
                         </div>
                       )}

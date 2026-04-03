@@ -17,7 +17,7 @@ export async function chatCompletion(messages, options = {}) {
       }
     }
 
-    const modelName = options.model || process.env.LLM_MODEL || "gemini-2.0-flash-exp";
+    const modelName = options.model || process.env.LLM_MODEL || "gemini-2.5-flash";
     const model = genAI.getGenerativeModel({ model: modelName });
 
     const result = await model.generateContent(prompt);

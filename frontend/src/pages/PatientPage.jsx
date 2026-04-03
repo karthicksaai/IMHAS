@@ -11,16 +11,16 @@ function Sidebar({ collapsed, onToggle }) {
   const location = useLocation();
   const { user, logout } = useAuth();
   const nav = [
-    { icon: '🏠', label: 'Dashboard', path: '/' },
-    { icon: '👥', label: 'Patients',  path: '/patients' },
-    { icon: '🛡️', label: 'Security',  path: '/security' },
-    { icon: '⚙️',  label: 'Settings',  path: '/settings' },
+    { icon: '', label: 'Dashboard', path: '/' },
+    { icon: '', label: 'Patients',  path: '/patients' },
+    { icon: '', label: 'Security',  path: '/security' },
+    { icon: '',  label: 'Settings',  path: '/settings' },
   ];
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div className="flex items-center gap-3 px-4 py-5 border-b" style={{ borderColor:'rgba(255,255,255,0.07)' }}>
         <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-             style={{ background:'rgba(14,165,233,0.2)', border:'1px solid rgba(14,165,233,0.3)' }}>🏥</div>
+             style={{ background:'rgba(14,165,233,0.2)', border:'1px solid rgba(14,165,233,0.3)' }}></div>
         {!collapsed && (
           <div>
             <div className="text-white font-bold text-base">IMHAS</div>
@@ -56,7 +56,7 @@ function Sidebar({ collapsed, onToggle }) {
                 <div className="text-white text-sm font-medium truncate">{user?.name || 'Clinician'}</div>
                 <div className="text-slate-400 text-xs capitalize">{user?.role || 'doctor'}</div>
               </div>
-              <button onClick={logout} style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8' }}>↪️</button>
+              <button onClick={logout} style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8' }}>↪</button>
             </>
           )}
         </div>
@@ -130,7 +130,7 @@ export default function PatientPage() {
           </div>
         ) : !patient ? (
           <div className="page-content text-center py-20 text-slate-400">
-            <div className="text-5xl mb-4">🚫</div>
+            <div className="text-5xl mb-4"></div>
             <p className="text-lg font-medium">Patient not found</p>
             <button className="btn-primary mt-4" onClick={() => navigate('/')}>Back to Dashboard</button>
           </div>
@@ -153,10 +153,10 @@ export default function PatientPage() {
                   {patient.status === 'critical' && <span className="badge badge-danger">Critical</span>}
                 </div>
                 <div className="flex flex-wrap gap-4 text-sm text-slate-500">
-                  {patient.age      && <span>👤 Age {patient.age}</span>}
-                  {patient._id      && <span>🏥 ID: {patient._id.slice(-8).toUpperCase()}</span>}
-                  {patient.createdAt && <span>📅 Registered {new Date(patient.createdAt).toLocaleDateString()}</span>}
-                  {patient.documents?.length > 0 && <span>📄 {patient.documents.length} document{patient.documents.length > 1 ? 's' : ''}</span>}
+                  {patient.age      && <span> Age {patient.age}</span>}
+                  {patient._id      && <span> ID: {patient._id.slice(-8).toUpperCase()}</span>}
+                  {patient.createdAt && <span> Registered {new Date(patient.createdAt).toLocaleDateString()}</span>}
+                  {patient.documents?.length > 0 && <span> {patient.documents.length} document{patient.documents.length > 1 ? 's' : ''}</span>}
                 </div>
               </div>
 
@@ -177,9 +177,9 @@ export default function PatientPage() {
                   className={`tab-item ${tab === t ? 'active' : ''}`}
                   onClick={() => setTab(t)}
                   style={{ background:'none', border:'none', cursor:'pointer' }}>
-                  {t === 'overview'     && '📋 Overview'}
-                  {t === 'diagnostics'  && '🧠 AI Diagnostics'}
-                  {t === 'billing'      && '💳 Billing'}
+                  {t === 'overview'     && ' Overview'}
+                  {t === 'diagnostics'  && ' AI Diagnostics'}
+                  {t === 'billing'      && ' Billing'}
                 </button>
               ))}
             </div>
@@ -217,7 +217,7 @@ export default function PatientPage() {
                         <div key={i}
                              className="flex items-center gap-3 px-3 py-2.5 rounded-lg"
                              style={{ background:'#f8fafc', border:'1px solid #e2e8f0' }}>
-                          <span className="text-lg">📄</span>
+                          <span className="text-lg"></span>
                           <span className="text-sm text-slate-700 truncate flex-1">
                             {typeof doc === 'string' ? doc.split('/').pop() : (doc.name || `Document ${i + 1}`)}
                           </span>
@@ -234,14 +234,14 @@ export default function PatientPage() {
                 <div className="card p-5 lg:col-span-2"
                      style={{ border:'1px solid rgba(14,165,233,0.2)', background:'rgba(14,165,233,0.03)' }}>
                   <div className="flex items-center gap-3 mb-4">
-                    <span className="text-xl">🧠</span>
+                    <span className="text-xl"></span>
                     <h3 className="text-sm font-bold text-slate-700">RAG Index Status</h3>
                     <span className="badge badge-success ml-auto">Ready</span>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     {[
-                      ['Model',     'BERT MiniLM'],
-                      ['Dimension', '384'],
+                      ['Model',     'Gemini gemini-embedding-001'],
+                      ['Dimension', '768'],
                       ['Chunks',    patient.documents?.length ? `${patient.documents.length * 3}` : '0'],
                       ['Status',    'Indexed'],
                     ].map(([k, v]) => (
