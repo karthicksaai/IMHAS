@@ -1,22 +1,20 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import { authenticate } from '../middleware/auth.js';
-import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
+import { fileURLToPath, pathToFileURL } from 'url';
 import path from 'path';
 
-// Resolve shared models using absolute path derived from this file's location
-// Structure: IMHAS/IMHAS/backend/src/routes/patientRoutes.js
-//            IMHAS/IMHAS/shared/models/Patient.js
+// Resolve shared models folder: IMHAS/IMHAS/backend/src/routes/ -> up 3 = IMHAS/IMHAS/ -> + shared/models
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedModels = path.resolve(__dirname, '../../..', 'shared', 'models');
 
-const { default: Patient } = await import(path.join(sharedModels, 'Patient.js').replace(/\\/g, '/'));
-const { default: Document } = await import(path.join(sharedModels, 'Document.js').replace(/\\/g, '/'));
+// pathToFileURL converts C:\...\Patient.js -> file:///C:/.../ (required for Windows ESM)
+const { default: Patient } = await import(pathToFileURL(path.join(sharedModels, 'Patient.js')).href);
+const { default: Document } = await import(pathToFileURL(path.join(sharedModels, 'Document.js')).href);
 
 const router = express.Router();
 
-// GET /api/patients — list all patients
+// GET /api/patients
 router.get('/', authenticate, async (req, res) => {
   try {
     const patients = await Patient.find({}).sort({ createdAt: -1 }).lean();
@@ -26,7 +24,7 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/patients/:id — single patient
+// GET /api/patients/:id
 router.get('/:id', authenticate, async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id).lean();
@@ -81,12 +79,7 @@ router.get('/:id/rag-status', authenticate, async (req, res) => {
   try {
     const Embedding = mongoose.model('Embedding');
     const count = await Embedding.countDocuments({ patientId: req.params.id });
-    res.json({
-      model: 'gemini-embedding-001',
-      dimensions: 768,
-      totalChunks: count,
-      status: count > 0 ? 'Indexed' : 'Not indexed',
-    });
+    res.json({ model: 'gemini-embedding-001', dimensions: 768, totalChunks: count, status: count > 0 ? 'Indexed' : 'Not indexed' });
   } catch {
     res.json({ model: 'gemini-embedding-001', dimensions: 768, totalChunks: 0, status: 'Not indexed' });
   }
