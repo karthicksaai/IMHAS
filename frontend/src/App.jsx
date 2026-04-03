@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import LoginPage    from './pages/LoginPage';
+import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
-import PatientPage  from './pages/PatientPage';
+import PatientsPage from './pages/PatientsPage';
+import PatientPage from './pages/PatientPage';
 import SecurityPage from './pages/SecurityPage';
+import SettingsPage from './pages/SettingsPage';
 
 function PrivateRoute({ children }) {
   const { user } = useAuth();
@@ -17,8 +19,10 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
+          <Route path="/patients" element={<PrivateRoute><PatientsPage /></PrivateRoute>} />
           <Route path="/patients/:id" element={<PrivateRoute><PatientPage /></PrivateRoute>} />
           <Route path="/security" element={<PrivateRoute><SecurityPage /></PrivateRoute>} />
+          <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

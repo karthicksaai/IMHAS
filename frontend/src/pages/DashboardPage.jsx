@@ -1,261 +1,258 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Search, UserPlus, RefreshCw, TrendingUp } from 'lucide-react';
+import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getPatients } from '../api/patientApi';
-import PatientCard from '../components/PatientCard';
-import IntakeForm  from '../components/IntakeForm';
 
-/* ── Sidebar ──────────────────────────────────────── */
-function Sidebar({ collapsed, onToggle }) {
-  const navigate  = useNavigate();
-  const location  = useLocation();
-  const { user, logout } = useAuth();
+const API = 'http://localhost:5000';
 
-  const nav = [
-    { icon: '', label: 'Dashboard', path: '/' },
-    { icon: '', label: 'Patients',  path: '/patients' },
-    { icon: '', label: 'Security',  path: '/security' },
-    { icon: '',  label: 'Settings',  path: '/settings' },
-  ];
+const AGENT_NAMES = [
+  { key: 'intake', label: 'Intake Agent' },
+  { key: 'rag-indexer', label: 'RAG Indexer' },
+  { key: 'diagnostics', label: 'Diagnostics Agent' },
+  { key: 'billing', label: 'Billing Agent' },
+  { key: 'security', label: 'Security Agent' },
+];
 
+function StatusDot({ active }) {
   return (
-    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-             style={{ background: 'rgba(14,165,233,0.2)', border: '1px solid rgba(14,165,233,0.3)' }}>
-          
-        </div>
-        {!collapsed && (
-          <div>
-            <div className="text-white font-bold text-base tracking-tight">IMHAS</div>
-            <div className="text-xs" style={{ color: '#0ea5e9' }}>Hospital AI System</div>
-          </div>
-        )}
-        <button
-          onClick={onToggle}
-          className="ml-auto text-slate-400 hover:text-white transition-colors text-lg"
-          style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-        >
-          {collapsed ? '›' : '‹'}
-        </button>
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 py-4 flex flex-col gap-1">
-        {nav.map(item => {
-          const active = location.pathname === item.path ||
-            (item.path === '/' && location.pathname === '/');
-          return (
-            <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
-              className={`sidebar-nav-item ${active ? 'active' : ''}`}
-              title={collapsed ? item.label : ''}
-              style={{ background: 'none', border: 'none', width: '100%', textAlign: 'left' }}
-            >
-              <span className="text-lg flex-shrink-0">{item.icon}</span>
-              {!collapsed && <span>{item.label}</span>}
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* User */}
-      <div className="border-t p-4" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
-               style={{ background: '#0ea5e9', color: 'white' }}>
-            {(user?.name || user?.email || 'U')[0].toUpperCase()}
-          </div>
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <div className="text-white text-sm font-medium truncate">{user?.name || 'Clinician'}</div>
-              <div className="text-slate-400 text-xs truncate capitalize">{user?.role || 'doctor'}</div>
-            </div>
-          )}
-          {!collapsed && (
-            <button
-              onClick={logout}
-              className="text-slate-400 hover:text-red-400 transition-colors text-sm"
-              title="Logout"
-              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-            >
-              ↪
-            </button>
-          )}
-        </div>
-      </div>
-    </aside>
+    <span
+      className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+        active ? 'bg-[#16a34a]' : 'bg-[#dc2626]'
+      }`}
+    />
   );
 }
 
-/* ── KPI Card ──────────────────────────────────────── */
-function KPICard({ icon, label, value, iconBg, trend }) {
+function StatCard({ label, value, trend }) {
   return (
-    <div className="kpi-card animate-fade-in-up">
-      <div className="flex items-start justify-between">
-        <div className="kpi-icon" style={{ background: iconBg }}>{icon}</div>
-        {trend && (
-          <span className="text-xs font-semibold"
-                style={{ color: trend > 0 ? '#22c55e' : '#ef4444' }}>
-            {trend > 0 ? '+' : ''}{trend}%
+    <div className="border border-[#e5e7eb] rounded-lg p-5 bg-white">
+      <p className="text-xs font-medium text-[#6b7280] uppercase tracking-wide mb-2">{label}</p>
+      <div className="flex items-end justify-between">
+        <span className="text-3xl font-bold text-gray-900">{value ?? '—'}</span>
+        {trend != null && (
+          <span className="flex items-center gap-1 text-xs text-[#16a34a] font-medium mb-1">
+            <TrendingUp className="w-3 h-3" />{trend}
           </span>
         )}
       </div>
-      <div className="text-3xl font-bold text-slate-900">{value}</div>
-      <div className="text-sm text-slate-500">{label}</div>
     </div>
   );
 }
 
-/* ── Agent Status Strip ──────────────────────────────── */
-const AGENTS = [
-  { label: 'RAG Agent',       color: '#22c55e' },
-  { label: 'Billing Agent',   color: '#22c55e' },
-  { label: 'Security Agent',  color: '#22c55e' },
-  { label: 'NLP Chatbot',     color: '#22c55e' },
-];
-
-function AgentStrip() {
-  return (
-    <div className="card p-4 flex flex-wrap gap-3 items-center">
-      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider mr-2">System Agents</span>
-      {AGENTS.map(a => (
-        <div key={a.label} className="agent-strip">
-          <span className="live-dot" style={{ background: a.color }} />
-          <span>{a.label}</span>
-          <span className="ml-1 text-emerald-600 text-xs">Operational</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ── Dashboard ──────────────────────────────────────── */
 export default function DashboardPage() {
-  const [collapsed, setCollapsed] = useState(false);
-  const [patients, setPatients]   = useState([]);
-  const [search, setSearch]       = useState('');
-  const [loading, setLoading]     = useState(true);
-  const [showForm, setShowForm]   = useState(false);
+  const { token } = useAuth();
+  const navigate = useNavigate();
+  const [patients, setPatients] = useState([]);
+  const [filtered, setFiltered] = useState([]);
+  const [search, setSearch] = useState('');
+  const [stats, setStats] = useState({});
+  const [health, setHealth] = useState({});
+  const [loading, setLoading] = useState(true);
 
-  const fetchPatients = async () => {
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const fetchData = useCallback(async () => {
     try {
-      const data = await getPatients();
-      setPatients(data);
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
-  };
+      const [pRes, hRes] = await Promise.allSettled([
+        fetch(`${API}/api/patients`, { headers }),
+        fetch(`${API}/api/health`, { headers }),
+      ]);
 
-  useEffect(() => { fetchPatients(); }, []);
+      if (pRes.status === 'fulfilled' && pRes.value.ok) {
+        const data = await pRes.value.json();
+        const list = Array.isArray(data) ? data : (data.patients || []);
+        setPatients(list);
+        setFiltered(list);
+        setStats({
+          total: list.length,
+          indexedToday: list.filter(p => {
+            const d = new Date(p.createdAt || p.registeredAt);
+            return d.toDateString() === new Date().toDateString();
+          }).length,
+        });
+      }
 
-  const filtered = patients.filter(p =>
-    (p.name || '').toLowerCase().includes(search.toLowerCase()) ||
-    (p._id  || '').toLowerCase().includes(search.toLowerCase())
-  );
+      if (hRes.status === 'fulfilled' && hRes.value.ok) {
+        const h = await hRes.value.json();
+        setHealth(h);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
 
-  const kpis = [
-    { icon: '', label: 'Total Patients',        value: patients.length,  iconBg: 'rgba(14,165,233,0.1)',  trend: 12 },
-    { icon: '', label: 'Indexed Today',         value: Math.ceil(patients.length * 0.7), iconBg: 'rgba(34,197,94,0.1)',  trend: 5 },
-    { icon: '', label: 'AI Diagnostics Today',  value: Math.ceil(patients.length * 0.4), iconBg: 'rgba(168,85,247,0.1)', trend: 8 },
-    { icon: '⏱',  label: 'Avg Processing Time',  value: '1.2s',           iconBg: 'rgba(245,158,11,0.1)', trend: -3 },
-  ];
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API}/api/health`, { headers });
+        if (res.ok) setHealth(await res.json());
+      } catch {}
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [token]);
+
+  useEffect(() => {
+    const q = search.toLowerCase();
+    setFiltered(
+      q ? patients.filter(p =>
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.patientId || '').toLowerCase().includes(q)
+      ) : patients
+    );
+  }, [search, patients]);
+
+  function formatDate(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  function statusBadge(status) {
+    const s = (status || 'active').toLowerCase();
+    if (s === 'active') return <span className="px-2 py-0.5 rounded text-xs font-medium bg-[#16a34a]/10 text-[#16a34a]">Active</span>;
+    if (s === 'inactive') return <span className="px-2 py-0.5 rounded text-xs font-medium bg-[#6b7280]/10 text-[#6b7280]">Inactive</span>;
+    return <span className="px-2 py-0.5 rounded text-xs font-medium bg-[#d97706]/10 text-[#d97706]">{status}</span>;
+  }
+
+  const agentStatus = health.agents || {};
+  const diagToday = health.diagnosticsToday ?? '—';
+  const avgTime = health.avgProcessingMs ? `${(health.avgProcessingMs / 1000).toFixed(1)}s` : '—';
 
   return (
-    <div>
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(p => !p)} />
-
-      <main className={`page-layout ${collapsed ? 'sidebar-collapsed' : ''}`}>
-
+    <Layout>
+      <div className="px-8 py-6">
         {/* Header */}
-        <header className="page-header">
-          <h1 className="text-lg font-bold text-slate-900">Dashboard</h1>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-sm text-[#6b7280] mt-0.5">Hospital overview and system status</p>
+          </div>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></span>
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b7280]" />
               <input
-                className="input-field pl-9 w-64"
-                placeholder="Search patients…"
+                type="text"
+                placeholder="Search patients..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
+                className="pl-9 pr-4 py-2 text-sm border border-[#e5e7eb] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30 focus:border-[#2563eb] w-56"
               />
             </div>
-            <button className="relative text-slate-500 hover:text-slate-800 text-xl"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-              
-              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" />
+            <Link
+              to="/patients"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-[#2563eb] border border-[#2563eb]/30 rounded-lg hover:bg-[#2563eb]/5 transition-colors"
+            >
+              <UserPlus className="w-4 h-4" />
+              Register Patient
+            </Link>
+            <button
+              onClick={fetchData}
+              className="p-2 rounded-lg border border-[#e5e7eb] text-[#6b7280] hover:text-gray-900 hover:bg-gray-50 transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw className="w-4 h-4" />
             </button>
           </div>
-        </header>
+        </div>
 
-        <div className="page-content flex flex-col gap-6">
+        {/* Stat Cards */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <StatCard label="Total Patients" value={stats.total} />
+          <StatCard label="Registered Today" value={stats.indexedToday} />
+          <StatCard label="AI Diagnostics Today" value={diagToday} />
+          <StatCard label="Avg Processing Time" value={avgTime} />
+        </div>
 
-          {/* KPIs */}
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-            {kpis.map((k, i) => (
-              <div key={i} style={{ animationDelay: `${i * 0.08}s` }}>
-                <KPICard {...k} />
-              </div>
-            ))}
-          </div>
-
-          {/* Main grid */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-
-            {/* Register */}
-            <div className="xl:col-span-1 flex flex-col gap-4">
-              <div className="card p-5 animate-fade-in-up delay-200">
-                <h2 className="text-base font-bold text-slate-900 mb-1">Register Patient</h2>
-                <p className="text-sm text-slate-500 mb-4">Add a new patient and start AI indexing.</p>
-                <button
-                  className="btn-primary w-full justify-center"
-                  onClick={() => setShowForm(p => !p)}
-                >
-                  {showForm ? ' Cancel' : '+ New Patient'}
-                </button>
-              </div>
-
-              {showForm && (
-                <div className="card p-5 animate-fade-in-up">
-                  <IntakeForm onSuccess={() => { setShowForm(false); fetchPatients(); }} />
-                </div>
-              )}
+        {/* Main Grid */}
+        <div className="grid grid-cols-3 gap-6">
+          {/* Recent Patients Table */}
+          <div className="col-span-2">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-900">Recent Patients</h2>
+              <Link to="/patients" className="text-xs text-[#2563eb] hover:underline">View all</Link>
             </div>
-
-            {/* Patient list */}
-            <div className="xl:col-span-2 card p-5 animate-fade-in-up delay-300">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-bold text-slate-900">Patients</h2>
-                <span className="badge badge-info">{filtered.length} records</span>
-              </div>
-
+            <div className="border border-[#e5e7eb] rounded-lg overflow-hidden">
               {loading ? (
-                <div className="flex flex-col gap-3">
-                  {[...Array(4)].map((_, i) => (
-                    <div key={i} className="skeleton h-16 w-full" />
-                  ))}
-                </div>
+                <div className="px-4 py-8 text-center text-sm text-[#6b7280]">Loading patients...</div>
               ) : filtered.length === 0 ? (
-                <div className="text-center py-12 text-slate-400">
-                  <div className="text-4xl mb-3"></div>
-                  <p className="font-medium">No patients found</p>
-                  <p className="text-sm mt-1">Register a patient to get started</p>
-                </div>
+                <div className="px-4 py-8 text-center text-sm text-[#6b7280]">No patients found.</div>
               ) : (
-                <div className="flex flex-col gap-2">
-                  {filtered.map(p => <PatientCard key={p._id} patient={p} />)}
-                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#e5e7eb] bg-gray-50">
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Name</th>
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Age</th>
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Status</th>
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Registered</th>
+                      <th className="px-4 py-2.5"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#e5e7eb]">
+                    {filtered.slice(0, 8).map(p => (
+                      <tr key={p._id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-7 h-7 rounded-full bg-[#2563eb]/10 text-[#2563eb] text-xs font-bold flex items-center justify-center shrink-0">
+                              {(p.name || 'U')[0].toUpperCase()}
+                            </div>
+                            <span className="font-medium text-gray-900">{p.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-[#6b7280]">{p.age || '—'}</td>
+                        <td className="px-4 py-3">{statusBadge(p.status)}</td>
+                        <td className="px-4 py-3 text-[#6b7280]">{formatDate(p.createdAt || p.registeredAt)}</td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => navigate(`/patients/${p._id}`)}
+                            className="text-xs text-[#2563eb] hover:underline font-medium"
+                          >
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           </div>
 
-          {/* Agent status strip */}
-          <div className="animate-fade-in-up delay-400">
-            <AgentStrip />
+          {/* System Status */}
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900 mb-3">System Status</h2>
+            <div className="border border-[#e5e7eb] rounded-lg overflow-hidden">
+              <div className="divide-y divide-[#e5e7eb]">
+                {AGENT_NAMES.map(({ key, label }) => {
+                  const agent = agentStatus[key] || {};
+                  const isUp = agent.status === 'running';
+                  const lastSeen = agent.lastSeen
+                    ? new Date(agent.lastSeen).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                    : null;
+                  return (
+                    <div key={key} className="flex items-center justify-between px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <StatusDot active={isUp} />
+                        <span className="text-sm text-gray-900">{label}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-xs font-medium ${ isUp ? 'text-[#16a34a]' : 'text-[#dc2626]' }`}>
+                          {isUp ? 'Running' : 'Stopped'}
+                        </span>
+                        {lastSeen && <p className="text-[10px] text-[#6b7280] mt-0.5">{lastSeen}</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="px-4 py-2.5 bg-gray-50 border-t border-[#e5e7eb]">
+                <p className="text-[10px] text-[#6b7280]">Polling every 10s</p>
+              </div>
+            </div>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </Layout>
   );
 }
