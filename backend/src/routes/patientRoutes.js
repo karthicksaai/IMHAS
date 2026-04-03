@@ -1,22 +1,15 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import { authenticate } from '../middleware/auth.js';
+import Patient from '../../../../shared/models/Patient.js';
+import Document from '../../../../shared/models/Document.js';
 
 const router = express.Router();
-
-// Helper: lazy-load models
-function Patient() { return mongoose.model('Patient'); }
-function Document() {
-  try { return mongoose.model('Document'); } catch {
-    const s = new mongoose.Schema({ patientId: mongoose.Types.ObjectId, fileName: String, fileSize: Number, status: String, createdAt: { type: Date, default: Date.now }, uploadedAt: Date }, { timestamps: true });
-    return mongoose.model('Document', s);
-  }
-}
 
 // GET /api/patients — list all patients
 router.get('/', authenticate, async (req, res) => {
   try {
-    const patients = await Patient().find({}).sort({ createdAt: -1 }).lean();
+    const patients = await Patient.find({}).sort({ createdAt: -1 }).lean();
     res.json(patients);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -26,7 +19,7 @@ router.get('/', authenticate, async (req, res) => {
 // GET /api/patients/:id — single patient
 router.get('/:id', authenticate, async (req, res) => {
   try {
-    const patient = await Patient().findById(req.params.id).lean();
+    const patient = await Patient.findById(req.params.id).lean();
     if (!patient) return res.status(404).json({ error: 'Not found' });
     res.json(patient);
   } catch (err) {
@@ -37,25 +30,22 @@ router.get('/:id', authenticate, async (req, res) => {
 // GET /api/patients/:id/documents — documents for a patient
 router.get('/:id/documents', authenticate, async (req, res) => {
   try {
-    const Doc = Document();
-    const docs = await Doc.find({ patientId: req.params.id }).sort({ createdAt: -1 }).lean();
+    const docs = await Document.find({ patientId: req.params.id }).sort({ createdAt: -1 }).lean();
     res.json(docs);
   } catch (err) {
-    // Graceful fallback if Document model not set up yet
     res.json([]);
   }
 });
 
-// POST /api/patients/:id/documents — upload documents (handled by existing intake, but we provide a passthrough)
+// POST /api/patients/:id/documents — upload documents
 router.post('/:id/documents', authenticate, async (req, res) => {
   try {
     const files = req.files?.documents;
     if (!files) return res.status(400).json({ error: 'No files uploaded' });
     const fileArray = Array.isArray(files) ? files : [files];
-    const Doc = Document();
     const saved = [];
     for (const file of fileArray) {
-      const doc = await Doc.create({
+      const doc = await Document.create({
         patientId: req.params.id,
         fileName: file.name,
         fileSize: file.size,
@@ -64,7 +54,6 @@ router.post('/:id/documents', authenticate, async (req, res) => {
       });
       saved.push(doc);
     }
-    // Optionally enqueue rag-indexer job here if queue is available
     try {
       const { ragIndexerQueue } = await import('../queues/index.js');
       for (const doc of saved) {
@@ -93,27 +82,24 @@ router.get('/:id/rag-status', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/patients/:id/timeline — federated timeline aggregation
+// GET /api/patients/:id/timeline
 router.get('/:id/timeline', authenticate, async (req, res) => {
   try {
     const pid = req.params.id;
     const events = [];
 
-    // 1. Registration event
     try {
-      const p = await Patient().findById(pid).lean();
+      const p = await Patient.findById(pid).lean();
       if (p) events.push({
         type: 'registration',
         label: 'Patient Registered',
         timestamp: p.createdAt,
-        description: `Registered via intake agent`,
+        description: 'Registered via intake agent',
       });
     } catch {}
 
-    // 2. Document upload events
     try {
-      const Doc = Document();
-      const docs = await Doc.find({ patientId: pid }).sort({ createdAt: 1 }).lean();
+      const docs = await Document.find({ patientId: pid }).sort({ createdAt: 1 }).lean();
       for (const doc of docs) {
         events.push({
           type: 'document_upload',
@@ -132,64 +118,32 @@ router.get('/:id/timeline', authenticate, async (req, res) => {
       }
     } catch {}
 
-    // 3. Diagnostic events
     try {
       const Diagnostic = mongoose.model('Diagnostic');
       const diags = await Diagnostic.find({ patientId: pid }).sort({ createdAt: 1 }).lean();
       for (const d of diags) {
-        events.push({
-          type: 'diagnosis_made',
-          label: 'AI Diagnosis Generated',
-          timestamp: d.createdAt,
-          description: d.question?.slice(0, 60),
-        });
-        if (d.approvalStatus === 'approved') {
-          events.push({
-            type: 'diagnosis_approved',
-            label: 'Diagnosis Approved',
-            timestamp: d.reviewedAt || d.updatedAt,
-            description: `Approved by ${d.reviewedBy || 'doctor'}`,
-          });
-        } else if (d.approvalStatus === 'rejected') {
-          events.push({
-            type: 'diagnosis_rejected',
-            label: 'Diagnosis Rejected',
-            timestamp: d.reviewedAt || d.updatedAt,
-            description: `Rejected by ${d.reviewedBy || 'doctor'}`,
-          });
-        }
+        events.push({ type: 'diagnosis_made', label: 'AI Diagnosis Generated', timestamp: d.createdAt, description: d.question?.slice(0, 60) });
+        if (d.approvalStatus === 'approved') events.push({ type: 'diagnosis_approved', label: 'Diagnosis Approved', timestamp: d.reviewedAt || d.updatedAt, description: `Approved by ${d.reviewedBy || 'doctor'}` });
+        else if (d.approvalStatus === 'rejected') events.push({ type: 'diagnosis_rejected', label: 'Diagnosis Rejected', timestamp: d.reviewedAt || d.updatedAt, description: `Rejected by ${d.reviewedBy || 'doctor'}` });
       }
     } catch {}
 
-    // 4. Billing events
     try {
       const Billing = mongoose.model('BillingProposal');
       const bills = await Billing.find({ patientId: pid }).sort({ createdAt: 1 }).lean();
       for (const b of bills) {
-        events.push({
-          type: 'billing_generated',
-          label: 'Bill Generated',
-          timestamp: b.createdAt,
-          description: b.totalAmount ? `Total: ${b.totalAmount.toFixed(2)}` : '',
-        });
+        events.push({ type: 'billing_generated', label: 'Bill Generated', timestamp: b.createdAt, description: b.totalAmount ? `Total: ${b.totalAmount.toFixed(2)}` : '' });
       }
     } catch {}
 
-    // 5. Anomaly events
     try {
       const AuditLog = mongoose.model('AuditLog');
       const anomalies = await AuditLog.find({ patientId: pid, type: 'anomaly' }).sort({ timestamp: 1 }).lean();
       for (const a of anomalies) {
-        events.push({
-          type: 'anomaly_detected',
-          label: 'Security Anomaly Detected',
-          timestamp: a.timestamp || a.createdAt,
-          description: a.description || a.action,
-        });
+        events.push({ type: 'anomaly_detected', label: 'Security Anomaly Detected', timestamp: a.timestamp || a.createdAt, description: a.description || a.action });
       }
     } catch {}
 
-    // Sort all events chronologically
     events.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     res.json(events);
   } catch (err) {
