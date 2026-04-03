@@ -122,10 +122,54 @@ export const checkInteractions = async (req, res, next) => {
       conflicts,
       checkedAgainst: existingMedications,
       proposedDrugs,
-      message: conflicts.length === 0
-        ? "No known drug interactions detected"
-        : `${conflicts.length} interaction(s) detected — review required`,
+      message:
+        conflicts.length === 0
+          ? "No known drug interactions detected"
+          : `${conflicts.length} interaction(s) detected — review required`,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Feature 1: GET /api/diagnostics/hitl-stats
+// Aggregates Diagnostic records by hitlBand and returns counts + approval rates
+export const getHITLStats = async (req, res, next) => {
+  try {
+    const pipeline = [
+      {
+        $match: { hitlBand: { $in: ["auto_approve", "mandatory_review", "second_opinion"] } },
+      },
+      {
+        $group: {
+          _id: "$hitlBand",
+          count:      { $sum: 1 },
+          approved:   { $sum: { $cond: [{ $eq: ["$approvalStatus", "approved"] }, 1, 0] } },
+          rejected:   { $sum: { $cond: [{ $eq: ["$approvalStatus", "rejected"] }, 1, 0] } },
+          avgConfidence: { $avg: "$confidence" },
+        },
+      },
+    ];
+
+    const raw = await Diagnostic.aggregate(pipeline);
+
+    const bands = ["auto_approve", "mandatory_review", "second_opinion"];
+    const stats = {};
+    for (const band of bands) {
+      const row = raw.find(r => r._id === band) || {};
+      const count = row.count || 0;
+      stats[band] = {
+        band,
+        count,
+        approved:      row.approved || 0,
+        rejected:      row.rejected || 0,
+        approvalRate:  count > 0 ? Math.round(((row.approved || 0) / count) * 100) : 0,
+        avgConfidence: row.avgConfidence != null ? Math.round(row.avgConfidence) : null,
+      };
+    }
+
+    const total = Object.values(stats).reduce((s, b) => s + b.count, 0);
+    res.json({ stats, total });
   } catch (err) {
     next(err);
   }
