@@ -1,361 +1,288 @@
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { diagnosticsApi } from '../api/diagnosticsApi';
-import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
+import { CheckCircle, XCircle, ChevronDown, ChevronRight, Zap, AlertTriangle } from 'lucide-react';
 
-const CONFIDENCE_THRESHOLD = 60;
+const API = 'http://localhost:5000';
 
-const ConfidenceBadge = ({ score }) => {
-  const color = score >= 80 ? 'green' : score >= 60 ? 'yellow' : 'red';
-  const label = score >= 80 ? 'High' : score >= 60 ? 'Moderate' : 'Low';
-  const colorMap = {
-    green: 'bg-green-100 text-green-800 border-green-200',
-    yellow: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    red: 'bg-red-100 text-red-800 border-red-200',
-  };
+function ConfidenceBar({ score }) {
+  const color = score >= 75 ? '#16a34a' : score >= 60 ? '#d97706' : '#dc2626';
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border ${colorMap[color]}`}>
-      <span className={`w-2 h-2 rounded-full bg-${color}-500`}></span>
-      {label} Confidence — {score}%
-    </span>
+    <div className="mt-2">
+      <div className="flex justify-between text-[10px] text-[#6b7280] mb-1">
+        <span>Confidence</span>
+        <span style={{ color }} className="font-semibold">{score}%</span>
+      </div>
+      <div className="h-1 bg-[#e5e7eb] rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: `${score}%`, background: color }} />
+      </div>
+    </div>
   );
-};
+}
 
-const ApprovalBadge = ({ status }) => {
-  const map = {
-    pending_review: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    approved: 'bg-green-100 text-green-800 border-green-200',
-    rejected: 'bg-red-100 text-red-800 border-red-200',
-  };
-  const labels = { pending_review: '⏳ Awaiting Doctor Review', approved: ' Approved', rejected: ' Rejected' };
+function XAIPanel({ diagnostic }) {
+  const chunks = diagnostic.retrievedChunks || [];
+  const topScore = chunks.length > 0 ? Math.max(...chunks.map(c => c.similarity || 0)) : null;
   return (
-    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${map[status] || map.pending_review}`}>
-      {labels[status] || 'Pending'}
-    </span>
+    <div className="mt-3 border border-[#e5e7eb] rounded-lg p-3 bg-gray-50 text-xs space-y-1.5">
+      <p className="font-semibold text-gray-900 text-xs uppercase tracking-wide">Explainability Breakdown</p>
+      <p className="text-[#6b7280]">Evidence chunks retrieved: <span className="text-gray-900 font-medium">{chunks.length}</span></p>
+      {topScore !== null && (
+        <p className="text-[#6b7280]">Top chunk similarity score: <span className="text-gray-900 font-medium">{(topScore * 100).toFixed(1)}%</span></p>
+      )}
+      {chunks[0]?.text && (
+        <p className="text-[#6b7280]">Answer grounded in: <em className="text-gray-800 not-italic">"{chunks[0].text.slice(0, 120)}{chunks[0].text.length > 120 ? '...' : ''}"</em></p>
+      )}
+    </div>
   );
-};
+}
 
-const DiagnosticsPanel = ({ patientId }) => {
-  const { addNotification, user } = useApp();
+function DiagnosticCard({ d, onApprove, onReject }) {
+  const [expanded, setExpanded] = useState(false);
+  const [showEvidence, setShowEvidence] = useState(false);
+  const [showXAI, setShowXAI] = useState(false);
+  const [reviewNote, setReviewNote] = useState('');
+  const [reviewing, setReviewing] = useState(false);
+
+  const statusColor = d.approvalStatus === 'approved' ? '#16a34a' : d.approvalStatus === 'rejected' ? '#dc2626' : '#d97706';
+  const statusLabel = d.approvalStatus === 'approved' ? 'Approved' : d.approvalStatus === 'rejected' ? 'Rejected' : 'Pending Review';
+
+  return (
+    <div className="border border-[#e5e7eb] rounded-lg overflow-hidden">
+      {/* Collapsed header - always visible */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+      >
+        {expanded ? <ChevronDown className="w-4 h-4 text-[#6b7280] shrink-0" /> : <ChevronRight className="w-4 h-4 text-[#6b7280] shrink-0" />}
+        <p className="flex-1 text-sm font-medium text-gray-900 truncate">{d.question}</p>
+        <span className="text-xs font-medium shrink-0" style={{ color: statusColor }}>{statusLabel}</span>
+        <span className="text-xs text-[#6b7280] shrink-0">{new Date(d.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 border-t border-[#e5e7eb]">
+          {/* Doctor question bubble */}
+          <div className="flex justify-end mt-3">
+            <div className="max-w-sm bg-[#2563eb] text-white text-sm px-3.5 py-2.5 rounded-2xl rounded-tr-sm">
+              {d.question}
+            </div>
+          </div>
+
+          {/* AI answer bubble */}
+          {d.rejected ? (
+            <div className="flex mt-3">
+              <div className="max-w-lg bg-[#dc2626]/5 border border-[#dc2626]/20 text-sm px-3.5 py-2.5 rounded-2xl rounded-tl-sm">
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertTriangle className="w-4 h-4 text-[#dc2626]" />
+                  <span className="text-xs font-semibold text-[#dc2626]">Rejected — Insufficient Evidence</span>
+                </div>
+                <p className="text-[#6b7280] text-xs">{d.rejectionReason}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex mt-3">
+              <div className="max-w-2xl bg-gray-50 border border-[#e5e7eb] text-sm px-3.5 py-2.5 rounded-2xl rounded-tl-sm">
+                <div className="prose prose-sm max-w-none text-gray-900 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                  <ReactMarkdown>{d.response || ''}</ReactMarkdown>
+                </div>
+                {d.confidence !== undefined && <ConfidenceBar score={d.confidence} />}
+
+                {/* Explainability toggle */}
+                <button
+                  onClick={() => setShowXAI(v => !v)}
+                  className="mt-2 text-xs text-[#2563eb] hover:underline flex items-center gap-1"
+                >
+                  <Zap className="w-3 h-3" />
+                  {showXAI ? 'Hide' : 'Show'} explainability breakdown
+                </button>
+                {showXAI && <XAIPanel diagnostic={d} />}
+
+                {/* Source evidence toggle */}
+                {d.retrievedChunks?.length > 0 && (
+                  <>
+                    <button
+                      onClick={() => setShowEvidence(v => !v)}
+                      className="mt-1.5 text-xs text-[#6b7280] hover:text-gray-900 underline underline-offset-2"
+                    >
+                      View Source Evidence ({d.retrievedChunks.length} passages)
+                    </button>
+                    {showEvidence && (
+                      <div className="mt-2 space-y-2">
+                        {d.retrievedChunks.map((chunk, idx) => (
+                          <div key={idx} className="border border-[#e5e7eb] rounded-lg p-2.5 bg-white">
+                            <div className="flex justify-between text-[10px] mb-1">
+                              <span className="font-semibold text-[#6b7280]">Evidence {idx + 1}</span>
+                              <span className={`font-semibold ${
+                                (chunk.similarity || 0) >= 0.8 ? 'text-[#16a34a]' :
+                                (chunk.similarity || 0) >= 0.6 ? 'text-[#d97706]' : 'text-[#dc2626]'
+                              }`}>{((chunk.similarity || 0) * 100).toFixed(1)}% match</span>
+                            </div>
+                            <p className="text-xs text-[#6b7280] italic">"{chunk.text}"</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Approve / Reject — HITL */}
+          {d.approvalStatus === 'pending_review' && !d.rejected && (
+            <div className="mt-4 pt-3 border-t border-[#e5e7eb]">
+              {reviewing ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={reviewNote}
+                    onChange={e => setReviewNote(e.target.value)}
+                    placeholder="Optional review note..."
+                    className="w-full px-3 py-2 text-xs border border-[#e5e7eb] rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30 focus:border-[#2563eb]"
+                    rows={2}
+                  />
+                  <div className="flex items-center gap-2 justify-end">
+                    <button onClick={() => setReviewing(false)} className="px-3 py-1.5 text-xs text-[#6b7280] border border-[#e5e7eb] rounded-lg hover:bg-gray-50">Cancel</button>
+                    <button
+                      onClick={() => { onReject(d._id, reviewNote); setReviewing(false); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#dc2626] rounded-lg hover:bg-[#b91c1c] transition-colors"
+                    >
+                      <XCircle className="w-3.5 h-3.5" /> Reject
+                    </button>
+                    <button
+                      onClick={() => { onApprove(d._id, reviewNote); setReviewing(false); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#16a34a] rounded-lg hover:bg-[#15803d] transition-colors"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" /> Approve
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setReviewing(true)}
+                    className="text-xs text-[#2563eb] font-medium hover:underline"
+                  >
+                    Review this diagnosis
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {d.approvalStatus !== 'pending_review' && d.reviewedBy && (
+            <p className="mt-3 text-[10px] text-[#6b7280] pt-2 border-t border-[#e5e7eb]">
+              Reviewed by <strong>{d.reviewedBy}</strong> on {new Date(d.reviewedAt).toLocaleString('en-IN')}
+              {d.reviewNote && <> · {d.reviewNote}</>}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function DiagnosticsPanel({ patientId }) {
+  const { token, user } = useAuth();
   const [question, setQuestion] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [diagnostics, setDiagnostics] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
-  const [reviewingId, setReviewingId] = useState(null);
-  const [reviewNote, setReviewNote] = useState('');
-  const [drugCheckResult, setDrugCheckResult] = useState(null);
-  const [drugCheckLoading, setDrugCheckLoading] = useState(false);
-  const [proposedDrugInput, setProposedDrugInput] = useState('');
-
-  useEffect(() => { loadDiagnostics(); }, [patientId]);
 
   const loadDiagnostics = async () => {
     try {
       const data = await diagnosticsApi.getPatientDiagnostics(patientId);
-      setDiagnostics(data);
-    } catch { addNotification({ type: 'error', message: 'Failed to load diagnostics' }); }
+      setDiagnostics(Array.isArray(data) ? data : []);
+    } catch {}
     finally { setLoadingHistory(false); }
   };
 
-  const handleSubmit = async (e) => {
+  useEffect(() => { loadDiagnostics(); }, [patientId]);
+
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!question.trim()) return;
-    setLoading(true);
+    setSubmitting(true);
     try {
       const result = await diagnosticsApi.createDiagnostic({ patientId, question: question.trim() });
-      addNotification({ type: 'success', message: 'Diagnostic queued — refresh in a moment' });
-      // Poll for result
-      setTimeout(async () => {
-        const updated = await diagnosticsApi.getDiagnostic(result.diagnosticId);
-        setDiagnostics((prev) => [updated, ...prev]);
-      }, 4000);
       setQuestion('');
-    } catch (error) {
-      addNotification({ type: 'error', message: error.message });
-    } finally { setLoading(false); }
-  };
+      setTimeout(async () => {
+        try {
+          const updated = await diagnosticsApi.getDiagnostic(result.diagnosticId);
+          setDiagnostics(prev => [updated, ...prev]);
+        } catch { loadDiagnostics(); }
+      }, 4000);
+    } catch (err) { console.error(err); }
+    finally { setSubmitting(false); }
+  }
 
-  const handleReview = async (id, approvalStatus) => {
+  async function handleApprove(id, reviewNote) {
     try {
       const updated = await diagnosticsApi.reviewDiagnostic(id, {
-        approvalStatus,
-        reviewNote,
-        reviewedBy: user?.name || 'doctor',
+        approvalStatus: 'approved', reviewNote, reviewedBy: user?.name || 'doctor',
       });
-      setDiagnostics((prev) => prev.map((d) => d._id === id ? updated.diagnostic : d));
-      setReviewingId(null);
-      setReviewNote('');
-      addNotification({ type: 'success', message: `Diagnostic ${approvalStatus}` });
-    } catch { addNotification({ type: 'error', message: 'Failed to submit review' }); }
-  };
+      setDiagnostics(prev => prev.map(d => d._id === id ? (updated.diagnostic || updated) : d));
+    } catch {}
+  }
 
-  const handleSecondOpinion = async (id) => {
+  async function handleReject(id, reviewNote) {
     try {
-      await diagnosticsApi.getSecondOpinion(id);
-      addNotification({ type: 'success', message: 'Second opinion queued — refresh in a moment' });
-      setTimeout(loadDiagnostics, 5000);
-    } catch { addNotification({ type: 'error', message: 'Failed to request second opinion' }); }
-  };
-
-  const handleDrugCheck = async () => {
-    if (!proposedDrugInput.trim()) return;
-    setDrugCheckLoading(true);
-    try {
-      const drugs = proposedDrugInput.split(',').map((d) => d.trim()).filter(Boolean);
-      const result = await diagnosticsApi.checkInteractions({ patientId, proposedDrugs: drugs });
-      setDrugCheckResult(result);
-    } catch { addNotification({ type: 'error', message: 'Drug check failed' }); }
-    finally { setDrugCheckLoading(false); }
-  };
+      const updated = await diagnosticsApi.reviewDiagnostic(id, {
+        approvalStatus: 'rejected', reviewNote, reviewedBy: user?.name || 'doctor',
+      });
+      setDiagnostics(prev => prev.map(d => d._id === id ? (updated.diagnostic || updated) : d));
+    } catch {}
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {/* HITL disclaimer */}
+      <div className="flex items-start gap-2.5 px-4 py-3 rounded-lg bg-[#d97706]/5 border border-[#d97706]/20">
+        <AlertTriangle className="w-4 h-4 text-[#d97706] shrink-0 mt-0.5" />
+        <p className="text-xs text-[#6b7280]">
+          <span className="font-semibold text-gray-900">Human-in-the-Loop:</span> All AI responses require doctor approval before becoming part of the official patient record. Responses below 60% confidence are automatically flagged.
+        </p>
+      </div>
 
-      {/* Drug Interaction Checker */}
-      <div className="card border-2 border-orange-200 bg-orange-50">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-            <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">Drug Interaction Checker</h3>
-            <p className="text-xs text-gray-500">Rule-based safety check — deterministic, no AI involved</p>
-          </div>
-        </div>
-        <div className="flex gap-3">
-          <input
-            type="text"
-            placeholder="Enter proposed drugs (comma-separated): aspirin, warfarin"
-            value={proposedDrugInput}
-            onChange={(e) => setProposedDrugInput(e.target.value)}
-            className="input-field flex-1"
-          />
+      {/* Question form */}
+      <form onSubmit={handleSubmit} className="border border-[#e5e7eb] rounded-lg p-4">
+        <label className="block text-xs font-semibold text-[#6b7280] uppercase tracking-wide mb-2">Ask a clinical question</label>
+        <textarea
+          value={question}
+          onChange={e => setQuestion(e.target.value)}
+          placeholder="E.g., Does this patient have any drug allergies? What medications are they on?"
+          className="w-full px-3 py-2 text-sm border border-[#e5e7eb] rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30 focus:border-[#2563eb]"
+          rows={3}
+          disabled={submitting}
+        />
+        <div className="flex items-center justify-between mt-3">
+          <span className="text-xs text-[#6b7280]">Powered by RAG + Gemini gemini-2.5-flash</span>
           <button
-            onClick={handleDrugCheck}
-            disabled={drugCheckLoading}
-            className="btn-primary whitespace-nowrap"
+            type="submit"
+            disabled={submitting || !question.trim()}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#2563eb] rounded-lg hover:bg-[#1d4ed8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {drugCheckLoading ? 'Checking...' : 'Check Safety'}
+            {submitting ? 'Analyzing...' : 'Get Diagnosis'}
           </button>
         </div>
+      </form>
 
-        {drugCheckResult && (
-          <div className={`mt-4 p-4 rounded-lg border-2 ${drugCheckResult.safe ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-400'}`}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">{drugCheckResult.safe ? '' : ''}</span>
-              <p className={`font-bold ${drugCheckResult.safe ? 'text-green-800' : 'text-red-800'}`}>
-                {drugCheckResult.message}
-              </p>
-            </div>
-            {drugCheckResult.conflicts.length > 0 && (
-              <div className="space-y-2 mt-3">
-                {drugCheckResult.conflicts.map((c, i) => (
-                  <div key={i} className={`p-3 rounded-lg border ${
-                    c.severity === 'critical' ? 'bg-red-100 border-red-300' :
-                    c.severity === 'high' ? 'bg-orange-100 border-orange-300' :
-                    'bg-yellow-100 border-yellow-300'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded ${
-                        c.severity === 'critical' ? 'bg-red-600 text-white' :
-                        c.severity === 'high' ? 'bg-orange-500 text-white' :
-                        'bg-yellow-500 text-white'
-                      }`}>{c.severity}</span>
-                      <span className="text-sm font-medium">{c.drugs.join(' + ')}</span>
-                    </div>
-                    <p className="text-sm mt-1">{c.risk}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-            <p className="text-xs text-gray-500 mt-3">
-              Checked against patient’s {drugCheckResult.checkedAgainst.length} existing medication(s)
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Diagnostic Query */}
-      <div className="card">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-            <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">AI Diagnostics</h3>
-            <p className="text-sm text-gray-500">Answers grounded in patient’s own medical records</p>
-          </div>
-        </div>
-        <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
-           <strong>Human-in-the-Loop:</strong> All AI responses require doctor approval before becoming part of the official patient record. Responses below {CONFIDENCE_THRESHOLD}% confidence are automatically rejected.
-        </div>
-        <form onSubmit={handleSubmit}>
-          <textarea
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="E.g., Does this patient have any drug allergies? What medications are they on?"
-            className="input-field min-h-[100px] resize-none"
-            disabled={loading}
-          />
-          <div className="flex items-center justify-between mt-4">
-            <p className="text-xs text-gray-500">Powered by RAG + Gemini gemini-embedding-001</p>
-            <button type="submit" disabled={loading || !question.trim()} className="btn-primary flex items-center gap-2">
-              {loading ? (
-                <><svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>Analyzing...</>
-              ) : (
-                <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>Get Diagnosis</>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Results */}
+      {/* History */}
       {loadingHistory ? (
-        <div className="card text-center py-8"><div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>
+        <div className="py-8 text-center text-sm text-[#6b7280]">Loading diagnostics...</div>
       ) : diagnostics.length === 0 ? (
-        <div className="card text-center py-12">
-          <p className="text-gray-500">No diagnostics yet. Submit a question above.</p>
+        <div className="py-10 text-center">
+          <p className="text-sm text-[#6b7280]">No diagnostics yet. Submit a question above.</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {diagnostics.map((d) => (
-            <div key={d._id} className={`card hover:shadow-md transition-shadow border-l-4 ${
-              d.approvalStatus === 'approved' ? 'border-l-green-500' :
-              d.approvalStatus === 'rejected' ? 'border-l-red-500' :
-              'border-l-yellow-400'
-            }`}>
-              {/* Header */}
-              <div className="flex items-start justify-between mb-3 flex-wrap gap-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {d.isSecondOpinion && (
-                    <span className="bg-blue-100 text-blue-800 border border-blue-200 text-xs font-semibold px-2 py-1 rounded-full">2nd Opinion</span>
-                  )}
-                  <ApprovalBadge status={d.approvalStatus} />
-                  {d.confidence !== undefined && !d.rejected && <ConfidenceBadge score={d.confidence} />}
-                </div>
-                <span className="text-xs text-gray-500">{new Date(d.createdAt).toLocaleString()}</span>
-              </div>
-
-              {/* Question */}
-              <div className="mb-3">
-                <p className="text-xs font-semibold text-gray-500 mb-1">DOCTOR’S QUESTION</p>
-                <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm">{d.question}</p>
-              </div>
-
-              {/* Rejected by confidence threshold */}
-              {d.rejected ? (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="flex items-start gap-2">
-                    <span className="text-red-500 text-lg"></span>
-                    <div>
-                      <p className="font-semibold text-red-800 text-sm">AI Response Rejected — Insufficient Evidence</p>
-                      <p className="text-red-700 text-sm mt-1">{d.rejectionReason}</p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* AI Response */}
-                  <div className="mb-3">
-                    <p className="text-xs font-semibold text-gray-500 mb-1">AI RESPONSE</p>
-                    <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-4 rounded-lg border border-blue-100">
-                      <p className="whitespace-pre-wrap leading-relaxed text-sm text-gray-900">{d.response}</p>
-                    </div>
-                  </div>
-
-                  {/* Source Citations */}
-                  {d.retrievedChunks && d.retrievedChunks.length > 0 && (
-                    <details className="group mb-3">
-                      <summary className="cursor-pointer text-sm font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-2">
-                        <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                         View Source Evidence ({d.retrievedChunks.length} passages from patient’s documents)
-                      </summary>
-                      <div className="mt-3 space-y-2 pl-4 border-l-2 border-blue-200">
-                        {d.retrievedChunks.map((chunk, idx) => (
-                          <div key={idx} className="bg-white p-3 rounded border border-gray-200">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-semibold text-gray-600">Evidence {idx + 1}</span>
-                              <span className={`text-xs font-semibold ${
-                                chunk.similarity >= 0.8 ? 'text-green-600' :
-                                chunk.similarity >= 0.6 ? 'text-yellow-600' : 'text-red-500'
-                              }`}>{(chunk.similarity * 100).toFixed(1)}% match</span>
-                            </div>
-                            <p className="text-sm text-gray-700 italic">“{chunk.text}”</p>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  )}
-
-                  {/* Approve / Reject — only show if pending */}
-                  {d.approvalStatus === 'pending_review' && (
-                    <div className="border-t border-gray-200 pt-4 mt-3">
-                      {reviewingId === d._id ? (
-                        <div className="space-y-3">
-                          <textarea
-                            value={reviewNote}
-                            onChange={(e) => setReviewNote(e.target.value)}
-                            placeholder="Optional review note (e.g., confirmed with patient history)"
-                            className="input-field text-sm min-h-[60px] resize-none"
-                          />
-                          <div className="flex gap-3">
-                            <button
-                              onClick={() => handleReview(d._id, 'approved')}
-                              className="flex-1 py-2 px-4 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors text-sm flex items-center justify-center gap-2"
-                            >
-                               Approve — Add to Official Record
-                            </button>
-                            <button
-                              onClick={() => handleReview(d._id, 'rejected')}
-                              className="flex-1 py-2 px-4 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors text-sm flex items-center justify-center gap-2"
-                            >
-                               Reject — Do Not Use
-                            </button>
-                            <button onClick={() => setReviewingId(null)} className="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50 text-sm">
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex gap-3 flex-wrap">
-                          <button
-                            onClick={() => setReviewingId(d._id)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 text-sm"
-                          >
-                            Review This Diagnosis
-                          </button>
-                          <button
-                            onClick={() => handleSecondOpinion(d._id)}
-                            className="px-4 py-2 border-2 border-blue-500 text-blue-600 rounded-lg font-semibold hover:bg-blue-50 text-sm flex items-center gap-2"
-                          >
-                             Request Second Opinion
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Show approval details if already reviewed */}
-                  {d.approvalStatus !== 'pending_review' && d.reviewedBy && (
-                    <div className="border-t border-gray-200 pt-3 mt-3">
-                      <p className="text-xs text-gray-500">
-                        Reviewed by <strong>{d.reviewedBy}</strong> on {new Date(d.reviewedAt).toLocaleString()}
-                        {d.reviewNote && <> — Note: {d.reviewNote}</>}
-                      </p>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">History ({diagnostics.length})</p>
+          {diagnostics.map(d => (
+            <DiagnosticCard key={d._id} d={d} onApprove={handleApprove} onReject={handleReject} />
           ))}
         </div>
       )}
     </div>
   );
-};
-
-export default DiagnosticsPanel;
+}

@@ -27,11 +27,7 @@ app.get("/", (req, res) => {
   });
 });
 
-app.get("/health", (req, res) => {
-  res.json({ status: "healthy" });
-});
-
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   try {
@@ -44,12 +40,14 @@ const startServer = async () => {
     const { default: diagnosticsRoutes } = await import("./src/routes/diagnosticsRoutes.js");
     const { default: billingRoutes } = await import("./src/routes/billingRoutes.js");
     const { default: securityRoutes } = await import("./src/routes/securityRoutes.js");
+    const { default: healthRoutes } = await import("./src/routes/healthRoutes.js");
 
     app.use("/api/patients", patientRoutes);
     app.use("/api/intake", intakeRoutes);
     app.use("/api/diagnostics", diagnosticsRoutes);
     app.use("/api/billing", billingRoutes);
     app.use("/api/security", securityRoutes);
+    app.use("/api/health", healthRoutes);
 
     app.use(errorHandler);
 
