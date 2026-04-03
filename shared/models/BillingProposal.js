@@ -7,13 +7,19 @@ const lineItemSchema = new mongoose.Schema({
   rationale:   { type: String, default: "" },
 }, { _id: false });
 
+const drugConflictSchema = new mongoose.Schema({
+  drugs:    { type: [String], default: [] },
+  risk:     { type: String, default: "" },
+  severity: { type: String, default: "medium" },
+}, { _id: false });
+
 const billingProposalSchema = new mongoose.Schema(
   {
     patientId: { type: String, required: true, index: true },
 
-    // ── AI-generated itemized bill (new billing agent output) ──
+    // AI-generated itemized bill
     lineItems:        { type: [lineItemSchema], default: [] },
-    itemizedBill:     { type: [lineItemSchema], default: [] }, // alias kept for compatibility
+    itemizedBill:     { type: [lineItemSchema], default: [] },
     totalAmount:      { type: Number, default: 0 },
     aiReasoning:      { type: String, default: "" },
     generatedBy:      { type: String, default: "billing-agent-ai" },
@@ -24,7 +30,7 @@ const billingProposalSchema = new mongoose.Schema(
       default: "pending",
     },
 
-    // ── Legacy optimizer fields (kept for backwards compat) ──
+    // Legacy optimizer fields
     treatments: [
       {
         name:          String,
@@ -40,17 +46,17 @@ const billingProposalSchema = new mongoose.Schema(
     optimizationStrategy: { type: String, default: "" },
     discountsApplied:     [String],
 
-    // ── Status ──
+    // Status
     status: {
       type: String,
       enum: ["pending", "processing", "completed", "error"],
       default: "pending",
     },
 
-    // ── Human-in-the-loop ──
+    // Human-in-the-loop — "blocked" added for critical drug interactions
     approvalStatus: {
       type: String,
-      enum: ["pending_review", "approved", "rejected"],
+      enum: ["pending_review", "approved", "rejected", "blocked"],
       default: "pending_review",
     },
     reviewedBy:  { type: String, default: null },
@@ -58,6 +64,13 @@ const billingProposalSchema = new mongoose.Schema(
     reviewNote:  { type: String, default: "" },
     notes:       { type: String, default: "" },
     processingTime: { type: Number, default: 0 },
+
+    // Feature 3: Drug Interaction Safety Layer audit trail
+    drugInteractionCheck: {
+      checked:       { type: Boolean, default: false },
+      conflicts:     { type: [drugConflictSchema], default: [] },
+      blockedReason: { type: String, default: "" },
+    },
   },
   { timestamps: true }
 );
