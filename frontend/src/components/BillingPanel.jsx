@@ -49,14 +49,22 @@ function BillCard({ bill, onApprove, onReject, onDelete }) {
   const items = bill.lineItems?.length ? bill.lineItems : (bill.itemizedBill || []);
   const isBroken = items.length === 0;
   const total = bill.totalAmount || bill.totalOptimized || 0;
-  const statusColor = bill.approvalStatus === 'approved' ? '#16a34a' : bill.approvalStatus === 'rejected' ? '#dc2626' : '#d97706';
-  const statusLabel = bill.approvalStatus === 'approved' ? 'Approved' : bill.approvalStatus === 'rejected' ? 'Rejected' : 'Pending Review';
+  const isBlocked = bill.approvalStatus === 'blocked';
+
+  const statusColor =
+    bill.approvalStatus === 'approved' ? '#16a34a' :
+    bill.approvalStatus === 'rejected' ? '#dc2626' :
+    bill.approvalStatus === 'blocked'  ? '#dc2626' : '#d97706';
+  const statusLabel =
+    bill.approvalStatus === 'approved' ? 'Approved' :
+    bill.approvalStatus === 'rejected' ? 'Rejected' :
+    bill.approvalStatus === 'blocked'  ? 'Blocked'  : 'Pending Review';
 
   function handlePrint() {
     const content = printRef.current?.innerHTML;
     if (!content) return;
     const w = window.open('', '_blank');
-    w.document.write(`<html><head><title>Invoice – ${bill._id}</title><style>body{font-family:sans-serif;padding:32px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #e5e7eb;padding:8px 12px;font-size:13px}th{background:#f9fafb;font-weight:600}</style></head><body>${content}</body></html>`);
+    w.document.write(`<html><head><title>Invoice - ${bill._id}</title><style>body{font-family:sans-serif;padding:32px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #e5e7eb;padding:8px 12px;font-size:13px}th{background:#f9fafb;font-weight:600}</style></head><body>${content}</body></html>`);
     w.document.close();
     w.print();
   }
@@ -67,12 +75,18 @@ function BillCard({ bill, onApprove, onReject, onDelete }) {
     await onDelete(bill._id);
   }
 
+  const drugCheck = bill.drugInteractionCheck;
+  const hasConflicts = drugCheck?.conflicts?.length > 0;
+
   return (
-    <div className={`border rounded-lg overflow-hidden ${isBroken ? 'border-orange-200 bg-orange-50/30' : 'border-[#e5e7eb]'}`}>
+    <div className={`border rounded-lg overflow-hidden ${
+      isBlocked ? 'border-red-200 bg-red-50/20' :
+      isBroken ? 'border-orange-200 bg-orange-50/30' : 'border-[#e5e7eb]'
+    }`}>
       <div className="flex items-center gap-3 px-4 py-3">
         <button onClick={() => setExpanded(v => !v)} className="flex items-center gap-3 flex-1 text-left hover:opacity-80">
           <ChevronRight className={`w-4 h-4 text-[#6b7280] shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
-          <FileText className={`w-4 h-4 shrink-0 ${isBroken ? 'text-orange-400' : 'text-[#6b7280]'}`} />
+          <FileText className={`w-4 h-4 shrink-0 ${isBlocked ? 'text-red-400' : isBroken ? 'text-orange-400' : 'text-[#6b7280]'}`} />
           <div className="flex-1">
             <span className="text-sm font-medium text-gray-900">
               Invoice · {new Date(bill.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -80,8 +94,11 @@ function BillCard({ bill, onApprove, onReject, onDelete }) {
             {isBroken && (
               <span className="ml-2 text-[10px] text-orange-500 font-medium">(no breakdown — billing agent needs restart)</span>
             )}
+            {isBlocked && (
+              <span className="ml-2 text-[10px] text-red-500 font-medium">(approval blocked — critical drug interaction)</span>
+            )}
           </div>
-          <span className="text-sm font-bold text-gray-900">₹{total.toLocaleString('en-IN')}</span>
+          <span className="text-sm font-bold text-gray-900">Rs.{total.toLocaleString('en-IN')}</span>
           <span className="text-xs font-medium shrink-0" style={{ color: statusColor }}>{statusLabel}</span>
         </button>
         <button
@@ -99,7 +116,7 @@ function BillCard({ bill, onApprove, onReject, onDelete }) {
           {isBroken ? (
             <div className="mt-3 space-y-3">
               <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                <p className="text-xs font-semibold text-orange-800 mb-1">⚠️ No line items saved</p>
+                <p className="text-xs font-semibold text-orange-800 mb-1">No line items saved</p>
                 <p className="text-xs text-orange-700 leading-relaxed">
                   The billing agent saved this bill without line items. Restart the agent process, delete this bill, then click Generate Bill.
                 </p>
@@ -111,6 +128,51 @@ function BillCard({ bill, onApprove, onReject, onDelete }) {
             </div>
           ) : (
             <div ref={printRef}>
+              {/* Feature 3: Drug Interaction Blocked Banner */}
+              {isBlocked && hasConflicts && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-xs font-semibold text-red-800 mb-2">
+                    Approval blocked: critical drug interaction detected
+                  </p>
+                  <ul className="space-y-1">
+                    {drugCheck.conflicts.map((c, i) => (
+                      <li key={i} className="text-xs text-red-700">
+                        <span className="font-medium">{c.drugs?.join(' + ')}</span>
+                        {' — '}{c.risk}
+                        <span className="ml-1.5 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                          {c.severity}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {drugCheck.blockedReason && (
+                    <p className="text-[11px] text-red-600 mt-2 italic border-t border-red-200 pt-2">
+                      {drugCheck.blockedReason}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* High-severity warning (not blocked) */}
+              {!isBlocked && hasConflicts && (
+                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-xs font-semibold text-yellow-800 mb-1">
+                    Drug interaction warning — review before approving
+                  </p>
+                  <ul className="space-y-1">
+                    {drugCheck.conflicts.map((c, i) => (
+                      <li key={i} className="text-xs text-yellow-700">
+                        <span className="font-medium">{c.drugs?.join(' + ')}</span>
+                        {' — '}{c.risk}
+                        <span className="ml-1.5 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700">
+                          {c.severity}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {bill.aiReasoning && (
                 <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
                   <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wide mb-1">AI Billing Summary</p>
@@ -142,7 +204,7 @@ function BillCard({ bill, onApprove, onReject, onDelete }) {
                           </span>
                         </td>
                         <td className="py-2.5 text-right font-semibold text-gray-900">
-                          ₹{(item.amount || item.cost || 0).toLocaleString('en-IN')}
+                          Rs.{(item.amount || item.cost || 0).toLocaleString('en-IN')}
                         </td>
                       </tr>
                     ))}
@@ -150,7 +212,7 @@ function BillCard({ bill, onApprove, onReject, onDelete }) {
                   <tfoot>
                     <tr className="border-t-2 border-gray-300">
                       <td colSpan={2} className="py-3 font-bold text-gray-900">Total</td>
-                      <td className="py-3 text-right font-bold text-gray-900 text-base">₹{total.toLocaleString('en-IN')}</td>
+                      <td className="py-3 text-right font-bold text-gray-900 text-base">Rs.{total.toLocaleString('en-IN')}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -158,7 +220,7 @@ function BillCard({ bill, onApprove, onReject, onDelete }) {
 
               {bill.savingsPercentage > 0 && (
                 <p className="mt-2 text-xs text-[#16a34a] font-medium">
-                  ✓ {bill.savingsPercentage.toFixed(1)}% discount applied
+                  {bill.savingsPercentage.toFixed(1)}% discount applied
                 </p>
               )}
 
@@ -207,6 +269,12 @@ function BillCard({ bill, onApprove, onReject, onDelete }) {
                     )}
                   </div>
                 )}
+
+                {isBlocked && (
+                  <p className="text-xs text-red-600 font-medium">
+                    Resolve drug interaction before approving
+                  </p>
+                )}
               </div>
 
               {bill.approvalStatus !== 'pending_review' && bill.reviewedBy && (
@@ -250,7 +318,7 @@ export default function BillingPanel({ patientId, patientName }) {
 
   function startPolling(prevCount) {
     let attempts = 0;
-    setPollMsg('Generating bill with AI… this takes ~15 seconds');
+    setPollMsg('Generating bill with AI... this takes ~15 seconds');
     pollRef.current = setInterval(async () => {
       attempts++;
       const count = await loadBills();
@@ -312,6 +380,7 @@ export default function BillingPanel({ patientId, patientName }) {
   }
 
   const brokenCount = proposals.filter(p => !p.lineItems?.length && !p.itemizedBill?.length).length;
+  const blockedCount = proposals.filter(p => p.approvalStatus === 'blocked').length;
 
   return (
     <div className="space-y-5">
@@ -331,6 +400,15 @@ export default function BillingPanel({ patientId, patientName }) {
           }
         </button>
       </div>
+
+      {blockedCount > 0 && (
+        <div className="flex items-start gap-2 text-xs px-3 py-2.5 rounded-lg border bg-red-50 border-red-200 text-red-800">
+          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          <span>
+            <strong>{blockedCount} bill{blockedCount > 1 ? 's' : ''}</strong> blocked due to critical drug interaction. Expand to view details.
+          </span>
+        </div>
+      )}
 
       {brokenCount > 0 && !generating && (
         <div className="flex items-start gap-2 text-xs px-3 py-2.5 rounded-lg border bg-orange-50 border-orange-200 text-orange-800">
