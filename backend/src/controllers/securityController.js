@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import AuditLog from "../../../shared/models/AuditLog.js";
 import { securityQueue } from "../queues/securityQueue.js";
 
@@ -57,5 +58,24 @@ export const getSecurityAlerts = async (req, res, next) => {
     res.json(alerts);
   } catch (err) {
     next(err);
+  }
+};
+
+export const getAnomalies = async (req, res) => {
+  try {
+    const AuditLog = mongoose.model('AuditLog');
+    const { severity, limit = 50 } = req.query;
+
+    const query = { type: 'anomaly' };
+    if (severity) query.severity = severity;
+
+    const anomalies = await AuditLog.find(query)
+      .sort({ timestamp: -1, createdAt: -1 })
+      .limit(Number(limit))
+      .lean();
+
+    res.json(anomalies);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
