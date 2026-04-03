@@ -1,15 +1,23 @@
 import Embedding from "../../../shared/models/Embedding.js";
-import { embedText } from "../../../shared/services/bertEmbedder.js";
-import { topKSimilar } from "../../../shared/services/vectorUtils.js";
+import { embedQuery } from "../../../shared/services/geminiEmbedder.js";
+
+function cosineSimilarity(a, b) {
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot   += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}
 
 export async function retrieveRelevantChunks(patientId, query, k = 6) {
   console.log(`Retrieving top-${k} chunks for patient ${patientId}`);
 
-  // 1. Embed the query
-  const queryVector = await embedText(query);
-  console.log(`Query embedded (384-dim)`);
+  const queryVector = await embedQuery(query);
+  console.log(`Query embedded (${queryVector.length}-dim)`);
 
-  // 2. Fetch all embeddings for this patient
   const embeddings = await Embedding.find({ patientId }).lean();
 
   if (embeddings.length === 0) {
@@ -17,18 +25,19 @@ export async function retrieveRelevantChunks(patientId, query, k = 6) {
     return [];
   }
 
-  console.log(`Found ${embeddings.length} embeddings in database`);
+  console.log(`Scoring ${embeddings.length} stored embeddings...`);
 
-  // 3. Compute cosine similarity and get top-K
-  const topChunks = topKSimilar(queryVector, embeddings, k);
+  const scored = embeddings
+    .filter(e => Array.isArray(e.vector) && e.vector.length === queryVector.length)
+    .map(e => ({
+      chunkId:    e.chunkId,
+      text:       e.text,
+      similarity: cosineSimilarity(queryVector, e.vector),
+      docId:      e.docId,
+    }))
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, k);
 
-  // 4. Format results
-  const results = topChunks.map((chunk) => ({
-    chunkId: chunk.chunkId,
-    text: chunk.text,
-    similarity: chunk.score,
-    docId: chunk.docId,
-  }));
-
-  return results;
+  console.log(`Top similarity: ${scored[0]?.similarity?.toFixed(4)}`);
+  return scored;
 }

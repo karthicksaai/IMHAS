@@ -1,32 +1,27 @@
-import { embedText } from "../../../shared/services/bertEmbedder.js";
+import { embedText } from "../../../shared/services/geminiEmbedder.js";
 
 export async function embedChunks(chunks) {
   const vectors = [];
-
-  console.log(`Embedding ${chunks.length} chunks...`);
+  console.log(`Embedding ${chunks.length} chunks via Gemini text-embedding-004...`);
 
   for (let i = 0; i < chunks.length; i++) {
     try {
-      const vector = await embedText(chunks[i]);
-
-      if (!Array.isArray(vector) || vector.length !== 384) {
-        throw new Error(`Invalid embedding dimension: ${vector?.length}`);
+      const vector = await embedText(chunks[i], "RETRIEVAL_DOCUMENT");
+      if (!Array.isArray(vector) || vector.length === 0) {
+        throw new Error(`Empty embedding returned for chunk ${i}`);
       }
-
       vectors.push(vector);
-
-      // Log progress every 10 chunks
-      if ((i + 1) % 10 === 0 || i === chunks.length - 1) {
-        console.log(`  ✓ Embedded ${i + 1}/${chunks.length} chunks`);
+      if ((i + 1) % 5 === 0 || i === chunks.length - 1) {
+        console.log(`  Embedded ${i + 1}/${chunks.length}`);
       }
+      // Brief pause to stay within Gemini free-tier rate limit (1500 rpm)
+      if (i < chunks.length - 1) await new Promise(r => setTimeout(r, 50));
     } catch (error) {
       console.error(`Embedding failed for chunk ${i}:`, error.message);
-
-      // Fallback: zero vector
-      vectors.push(new Array(384).fill(0));
+      throw error; // Surface the error instead of silently storing zero vectors
     }
   }
 
-  console.log(`All embeddings generated (384-dim vectors)`);
+  console.log(`All ${vectors.length} embeddings generated (${vectors[0]?.length}-dim)`);
   return vectors;
 }

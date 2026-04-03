@@ -30,11 +30,8 @@ export default function IntakeForm({ onSuccess }) {
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => fd.append(k, v));
-      // Backend reads req.files?.file — send only the FIRST file under the key "file"
-      // (express-fileupload maps the FormData field name directly to req.files[fieldName])
-      if (files.length > 0) {
-        fd.append('file', files[0]);
-      }
+      // Backend reads req.files?.file - must use field name 'file'
+      if (files.length > 0) fd.append('file', files[0]);
       await registerPatient(fd);
       onSuccess?.();
     } catch (err) {
@@ -45,33 +42,30 @@ export default function IntakeForm({ onSuccess }) {
   };
 
   const fields = [
-    { key:'name',      label:'Full Name *',   placeholder:'Jane Doe',         type:'text' },
-    { key:'age',       label:'Age',           placeholder:'34',               type:'number' },
-    { key:'contact',   label:'Contact',       placeholder:'+91 98765 43210',  type:'text' },
-    { key:'address',   label:'Address',       placeholder:'City, State',      type:'text' },
+    { key:'name',    label:'Full Name *', placeholder:'Jane Doe',        type:'text'   },
+    { key:'age',     label:'Age',         placeholder:'34',              type:'number' },
+    { key:'contact', label:'Contact',     placeholder:'+91 98765 43210', type:'text'   },
+    { key:'address', label:'Address',     placeholder:'City, State',     type:'text'   },
   ];
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
 
-      {/* Header */}
       <div className="-mx-5 -mt-5 px-5 py-4 rounded-t-xl flex items-center gap-3"
            style={{ background:'rgba(14,165,233,0.08)', borderBottom:'1px solid rgba(14,165,233,0.15)' }}>
-        <span className="text-xl">👤</span>
         <div>
           <div className="font-bold text-slate-800 text-sm">New Patient Registration</div>
-          <div className="text-xs text-slate-500">Fill in details and attach medical documents</div>
+          <div className="text-xs text-slate-500">Fill in details and attach a medical document</div>
         </div>
       </div>
 
       {error && (
-        <div className="px-4 py-3 rounded-lg text-sm flex items-center gap-2"
+        <div className="px-4 py-3 rounded-lg text-sm"
              style={{ background:'rgba(239,68,68,0.08)', color:'#b91c1c', border:'1px solid rgba(239,68,68,0.2)' }}>
-          ⚠️ {error}
+          {error}
         </div>
       )}
 
-      {/* Text fields */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {fields.map(({ key, label, placeholder, type }) => (
           <div key={key}>
@@ -109,9 +103,8 @@ export default function IntakeForm({ onSuccess }) {
         </div>
       </div>
 
-      {/* Drag-drop zone */}
       <div>
-        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Medical Documents</label>
+        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Medical Document (PDF or TXT)</label>
         <div
           className={`dropzone ${dragOver ? 'drag-over' : ''}`}
           onClick={() => fileRef.current?.click()}
@@ -119,11 +112,9 @@ export default function IntakeForm({ onSuccess }) {
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
         >
-          <span className="text-3xl block mb-2">📄</span>
-          <p className="text-sm font-medium text-slate-600">Drop files here or <span style={{ color:'#0ea5e9' }}>browse</span></p>
-          <p className="text-xs text-slate-400 mt-1">PDF, TXT, DOCX, JPG, PNG · Max 10MB each</p>
-          {/* Added .txt — backend intakeController reads req.files?.file as key "file" */}
-          <input ref={fileRef} type="file" multiple accept=".pdf,.txt,.doc,.docx,.jpg,.jpeg,.png"
+          <p className="text-sm font-medium text-slate-600">Drop file here or <span style={{ color:'#0ea5e9' }}>browse</span></p>
+          <p className="text-xs text-slate-400 mt-1">PDF, TXT, DOCX -- Max 10MB</p>
+          <input ref={fileRef} type="file" multiple accept=".pdf,.txt,.doc,.docx"
             className="hidden" onChange={e => handleFiles(e.target.files)} />
         </div>
 
@@ -132,19 +123,16 @@ export default function IntakeForm({ onSuccess }) {
             {files.map((f, i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg"
                    style={{ background: i === 0 ? '#f0fdf4' : '#fafafa', border: i === 0 ? '1px solid #bbf7d0' : '1px solid #e2e8f0' }}>
-                <span className={i === 0 ? 'text-emerald-500' : 'text-slate-400'}>{i === 0 ? '✓' : '○'}</span>
                 <span className="text-sm text-slate-700 truncate flex-1">{f.name}</span>
                 {i === 0 && <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Primary</span>}
                 <span className="text-xs text-slate-400">{(f.size / 1024).toFixed(0)} KB</span>
                 <button type="button" onClick={() => setFiles(p => p.filter((_, j) => j !== i))}
                   className="text-slate-400 hover:text-red-500 transition-colors"
-                  style={{ background:'none', border:'none', cursor:'pointer' }}>
-                  ×
-                </button>
+                  style={{ background:'none', border:'none', cursor:'pointer' }}>x</button>
               </div>
             ))}
             {files.length > 1 && (
-              <p className="text-xs text-amber-600 mt-1">⚠️ Only the first file (Primary) will be indexed for AI Diagnostics.</p>
+              <p className="text-xs text-amber-600 mt-1">Only the first file will be indexed for AI Diagnostics.</p>
             )}
           </div>
         )}
@@ -156,7 +144,7 @@ export default function IntakeForm({ onSuccess }) {
         disabled={loading}
         style={{ opacity: loading ? 0.7 : 1 }}
       >
-        {loading ? <><span className="animate-spin">⟳</span> Registering…</> : '✓ Register Patient'}
+        {loading ? 'Registering...' : 'Register Patient'}
       </button>
     </form>
   );

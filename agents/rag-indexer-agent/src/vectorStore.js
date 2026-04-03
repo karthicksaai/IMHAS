@@ -2,30 +2,27 @@ import Embedding from "../../../shared/models/Embedding.js";
 
 export async function storeVectors({ patientId, docId, chunks, vectors, metadata }) {
   if (chunks.length !== vectors.length) {
-    throw new Error(`Chunk/vector mismatch: ${chunks.length} vs ${vectors.length}`);
+    throw new Error(`Chunk/vector mismatch: ${chunks.length} chunks vs ${vectors.length} vectors`);
   }
 
-  // Delete existing embeddings for this document (if re-indexing)
-  await Embedding.deleteMany({ docId });
+  // Remove existing embeddings for this document before re-indexing
+  const deleted = await Embedding.deleteMany({ docId });
+  if (deleted.deletedCount > 0) {
+    console.log(`Cleared ${deleted.deletedCount} existing embeddings for doc ${docId}`);
+  }
 
-  // Prepare embedding documents
-  const embeddings = chunks.map((chunk, index) => ({
+  const docs = chunks.map((chunk, index) => ({
     patientId,
     docId,
-    chunkId: `${docId}::${index}`,
-    text: chunk,
-    vector: vectors[index],
-    metadata: {
-      chunkIndex: index,
-      overlap: metadata?.overlap || 0,
-    },
+    chunkId:    `${docId}::${index}`,
+    chunkIndex: index,
+    text:       chunk,
+    vector:     vectors[index],
+    metadata:   { chunkIndex: index, ...(metadata || {}) },
   }));
 
-  // Bulk insert
-  const result = await Embedding.insertMany(embeddings);
-
+  const result = await Embedding.insertMany(docs, { ordered: false });
   console.log(`Stored ${result.length} embeddings in MongoDB`);
-
   return result.length;
 }
 

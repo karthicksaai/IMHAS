@@ -2,96 +2,63 @@ import "dotenv/config";
 import { Worker } from "bullmq";
 import { connectDB } from "../../../shared/config/db.js";
 import { redisConnection } from "../../../shared/config/redis.js";
-import Embedding from "../../../shared/models/Embedding.js";
 import { smartChunkText } from "./chunker.js";
 import { embedChunks } from "./embedder.js";
 import { storeVectors } from "./vectorStore.js";
 
-// Connect to MongoDB
 await connectDB(process.env.MONGO_URI);
 
 console.log("RAG Indexer Agent starting...");
+console.log("Queue: rag");
+console.log("Redis:", process.env.REDIS_HOST);
+console.log("MongoDB:", process.env.MONGO_URI);
 
 const ragWorker = new Worker(
   "rag",
   async (job) => {
     const startTime = Date.now();
-    console.log("\n========================================");
-    console.log(`[RAG Indexer] Job ${job.id} started`);
-    console.log("========================================");
+    console.log("\n------- RAG Indexer Job", job.id, "-------");
 
-    try {
-      const { patientId, docId, text, metadata } = job.data;
+    const { patientId, docId, text, metadata } = job.data;
 
-      console.log(`Document: ${docId}`);
-      console.log(`Patient: ${patientId}`);
-      console.log(`Text length: ${text.length} characters`);
-
-      // 1. Smart-chunk the document — respects sentence boundaries for better
-      //    semantic coherence, producing higher-quality RAG retrieval
-      console.log("Smart-chunking document (sentence-aware)...");
-      const chunks = smartChunkText(text, {
-        maxSize: 500,
-        minSize: 150,
-      });
-      console.log(`Created ${chunks.length} smart chunks`);
-
-      // 2. Generate embeddings for all chunks
-      console.log("Generating embeddings...");
-      const vectors = await embedChunks(chunks);
-      console.log(`Generated ${vectors.length} embeddings (384-dim each)`);
-
-      // 3. Store vectors in MongoDB
-      console.log("Storing embeddings in database...");
-      const stored = await storeVectors({
-        patientId,
-        docId,
-        chunks,
-        vectors,
-        metadata,
-      });
-      console.log(`Stored ${stored} embeddings`);
-
-      const duration = Date.now() - startTime;
-      console.log(`\n[RAG Indexer] Job ${job.id} completed in ${duration}ms`);
-
-      return {
-        status: "success",
-        patientId,
-        docId,
-        chunksIndexed: chunks.length,
-        embeddingsStored: stored,
-        processingTime: duration,
-      };
-    } catch (error) {
-      console.error(`[RAG Indexer] Job ${job.id} failed:`, error);
-      throw error;
+    if (!text || !text.trim()) {
+      console.warn(`Job ${job.id}: empty text received, skipping`);
+      return { status: "skipped", reason: "empty text" };
     }
+
+    console.log(`Patient : ${patientId}`);
+    console.log(`Document: ${docId}`);
+    console.log(`Text    : ${text.length} characters`);
+
+    // 1. Chunk
+    const chunks = smartChunkText(text, { maxSize: 600, minSize: 100, overlap: 80 });
+    if (chunks.length === 0) {
+      console.warn("No chunks produced, skipping");
+      return { status: "skipped", reason: "no chunks" };
+    }
+    console.log(`Chunks  : ${chunks.length}`);
+
+    // 2. Embed
+    const vectors = await embedChunks(chunks);
+    console.log(`Vectors : ${vectors.length} x ${vectors[0]?.length}-dim`);
+
+    // 3. Store
+    const stored = await storeVectors({ patientId, docId, chunks, vectors, metadata });
+    console.log(`Stored  : ${stored} embeddings`);
+
+    const ms = Date.now() - startTime;
+    console.log(`Done in ${ms}ms`);
+
+    return { status: "success", patientId, docId, chunksIndexed: chunks.length, stored, ms };
   },
   {
     connection: redisConnection,
-    concurrency: 3,
-    limiter: {
-      max: 5,
-      duration: 1000,
-    },
+    concurrency: 2,
   }
 );
 
-// Worker event handlers
-ragWorker.on("completed", (job) => {
-  console.log(`Job ${job.id} completed successfully`);
-});
-
-ragWorker.on("failed", (job, err) => {
-  console.error(`Job ${job?.id} failed:`, err.message);
-});
-
-ragWorker.on("error", (err) => {
-  console.error("Worker error:", err);
-});
+ragWorker.on("completed", (job) => console.log(`Job ${job.id} completed`));
+ragWorker.on("failed",    (job, err) => console.error(`Job ${job?.id} failed:`, err.message));
+ragWorker.on("error",     (err) => console.error("Worker error:", err));
 
 console.log("RAG Indexer Agent is running and listening for jobs...");
-console.log("Queue: rag");
-console.log("Redis:", process.env.REDIS_HOST);
-console.log("MongoDB:", process.env.MONGO_URI);
