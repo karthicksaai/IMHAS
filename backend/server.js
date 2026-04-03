@@ -35,6 +35,8 @@ const startServer = async () => {
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
+    await import('../shared/models/Patient.js');
+
     const { default: patientRoutes } = await import("./src/routes/patientRoutes.js");
     const { default: intakeRoutes } = await import("./src/routes/intakeRoutes.js");
     const { default: diagnosticsRoutes } = await import("./src/routes/diagnosticsRoutes.js");
