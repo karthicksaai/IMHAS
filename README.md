@@ -1,508 +1,371 @@
-# IMHAS - Intelligent Multi-Agent Hospital System
+# IMHAS — Intelligent Multi-Agent Hospital AI System
 
-> **Advanced AI-powered hospital management system with RAG-based diagnostics, intelligent billing optimization, and real-time security monitoring.**
+> **A full-stack, multi-agent hospital management system with RAG-based diagnostics, explainable AI confidence scoring, human-in-the-loop audit trail, real-time anomaly detection, and intelligent billing.**
 
 [![Node.js](https://img.shields.io/badge/Node.js-20.x-green.svg)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-18.x-blue.svg)](https://reactjs.org/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-7.0-green.svg)](https://www.mongodb.com/)
-[![Redis](https://img.shields.io/badge/Redis-7.0-red.svg)](https://redis.io/)
-[![Gemini](https://img.shields.io/badge/Gemini-2.0%20Flash-orange.svg)](https://ai.google.dev/)
+[![Redis](https://img.shields.io/badge/Upstash_Redis-7.x-red.svg)](https://upstash.com/)
+[![Gemini](https://img.shields.io/badge/Gemini-2.5_Flash-orange.svg)](https://ai.google.dev/)
 
 ---
 
 ## Table of Contents
 
-- [Features](#-features)
-- [Architecture](#-architecture)
-- [Tech Stack](#-tech-stack)
-- [Prerequisites](#-prerequisites)
-- [Installation](#-installation)
-- [Usage](#-usage)
-- [Project Structure](#-project-structure)
-- [API Documentation](#-api-documentation)
-- [Agents](#-agents)
-- [Contributing](#-contributing)
-- [License](#-license)
+- [What is Novel](#what-is-novel)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [API Reference](#api-reference)
+- [Agents](#agents)
+- [UI Pages](#ui-pages)
+- [Roadmap](#roadmap)
+- [License](#license)
 
 ---
 
-## Features
+## What is Novel
 
-### **AI-Powered Agents**
-- **Intake Agent**: Automated patient document processing with LLM-based data extraction
-- **RAG Indexer**: BERT embeddings (384-dim) + semantic search for medical records
-- **Diagnostics Agent**: Retrieval-Augmented Generation with Gemini 2.0 Flash
-- **Billing Agent**: Intelligent cost optimization using AI-driven alternative selection
-- **Security Agent**: Real-time anomaly detection with 5 detection rules
+These are the academic contributions that differentiate IMHAS from a standard hospital management system:
 
-### **Clinical Features**
-- Patient intake with medical document upload (PDF, TXT, DOC)
-- AI diagnostic assistant with context-aware responses
-- Automatic medical history extraction (allergies, medications, conditions)
-- RAG-based question answering from patient records
+### 1. Federated Patient Timeline
+Every multi-agent action on a patient is surfaced in a single chronological timeline — Registration → Document Upload → RAG Indexed → Diagnosis Made → Diagnosis Approved → Bill Generated → Anomaly Detected. This makes the distributed pipeline visible to clinical staff without requiring technical knowledge.
 
-### **Billing Optimization**
-- AI-powered treatment alternative suggestions
-- Multi-tier discount engine (bulk, senior, chronic conditions)
-- Cost savings tracking (10-40% average reduction)
-- Real-time optimization with patient condition awareness
+### 2. Explainable AI Confidence Scoring
+Diagnostic responses do not just show a confidence percentage. They show:
+- Number of evidence chunks retrieved from the RAG index
+- Top chunk cosine similarity score
+- A grounded excerpt from the highest-ranked chunk
 
-### **Security & Compliance**
-- Complete audit trail for all access events
-- 5-level anomaly detection system
-- Real-time security alerts
-- HIPAA-aligned access logging
+This makes the RAG pipeline interpretable — a key difference from black-box AI responses.
 
-### **Data Flow**
+### 3. Human-in-the-Loop (HITL) Audit Trail
+Every doctor approval or rejection of an AI diagnosis is stored and queryable. The Security page has a dedicated "HITL Events" filter in the audit log table showing: doctor name, timestamp, the original diagnostic question, and the AI confidence at time of decision. This demonstrates responsible, accountable AI in a clinical context.
 
-Patient Intake
-Frontend → Backend → Intake Queue → Intake Agent → MongoDB
-→ RAG Queue → RAG Agent → Embeddings
+### 4. Anomaly Detection Dashboard
+The security agent runs 5 detection rules (odd-hour access, rapid record access, brute-force attempts, dangerous operations, suspicious patterns). The Security page visualises:
+- Live anomaly feed with severity badges (Low / Medium / High / Critical)
+- Detection rules panel with editable thresholds and toggle on/off
+- 24-hour threat timeline sparkline chart
+- Toast notification on new anomaly
+- Unified audit log with filters: All / Normal / Anomaly / HITL Events
 
-AI Diagnostics
-Frontend → Backend → Diagnostics Queue → Diagnostics Agent
-↓
-(Retrieve embeddings)
-↓
-(Gemini LLM)
-↓
-Response → MongoDB
+### 5. Billing Intelligence Agent
+The billing agent uses Gemini to analyse a patient's medical history and generate a realistic itemised invoice: Consultation fee, Diagnostic AI analysis fee, Document processing fee, and Medication costs. It also tracks insurance claim status through a progress stepper (Pending → Submitted → Approved / Rejected) and supports PDF export.
 
-Billing Optimization
-Frontend → Backend → Billing Queue → Billing Agent
-↓
-(AI optimization)
-↓
-Proposal → MongoDB
+### 6. Multi-Document RAG
+Multiple documents per patient (lab reports, prescriptions, discharge summaries) are each independently indexed. The diagnostics agent retrieves chunks across all documents for a patient, allowing cross-document reasoning.
+
+### 7. Real-Time Agent Status Panel
+The dashboard polls `/api/health` every 10 seconds and shows per-agent: status (Running / Stopped / Error), jobs processed today, last job timestamp, and BullMQ queue depth. If an agent misses its heartbeat for 30 seconds, it turns red with a "Not responding" badge.
+
+---
+
+## Architecture
+
+```
+Browser (React + Vite)
+        |
+        | REST (JWT)
+        v
+Express Backend (localhost:5000)
+        |
+   ┌────┼────┬────────────┬──────────────┐
+   v    v    v            v              v
+Intake  RAG  Diagnostics  Billing  Security
+Agent  Indexer  Agent     Agent     Agent
+        |
+     BullMQ + Upstash Redis
+        |
+     MongoDB (hospital-ai)
+     Collections: patients, documents, diagnostics,
+                  billingproposals, auditlogs, embeddings
+```
+
+All agents use BullMQ job queues backed by Upstash Redis. The RAG pipeline uses Gemini `gemini-embedding-001` at 768 dimensions. Generation uses `gemini-2.5-flash`.
+
+---
 
 ## Tech Stack
 
-### **Backend**
-- **Runtime**: Node.js 20.x
-- **Framework**: Express.js
-- **Database**: MongoDB 7.0
-- **Queue**: Redis + BullMQ
-- **API**: REST
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, Vite, Tailwind CSS, React Router v6 |
+| Icons | lucide-react (no emoji, no other icon libraries) |
+| Markdown rendering | react-markdown |
+| Charts | recharts (Security sparkline) |
+| PDF export | jsPDF / react-to-print |
+| Backend | Node.js 20, Express.js |
+| Database | MongoDB 7 (Mongoose) |
+| Queue | BullMQ + Upstash Redis |
+| LLM | Google Gemini 2.5 Flash (`gemini-2.5-flash`) |
+| Embeddings | Google Gemini `gemini-embedding-001` (768 dimensions) |
+| Auth | JWT, roles: doctor / nurse / admin / receptionist |
+| Containerisation | Docker + Docker Compose |
 
-### **AI/ML**
-- **LLM**: Google Gemini 2.0 Flash
-- **Embeddings**: BERT MiniLM-L6-v2 (384-dim)
-- **Vector Search**: In-memory cosine similarity
-- **NLP**: Xenova Transformers.js
+---
 
-### **Frontend**
-- **Framework**: React 18
-- **Build Tool**: Vite
-- **Styling**: Tailwind CSS
-- **Routing**: React Router v6
-- **State**: Context API
+## Project Structure
 
-### **DevOps**
-- **Containerization**: Docker + Docker Compose
-- **Version Control**: Git
-- **Package Manager**: npm
+```
+IMHAS/
+├── frontend/
+│   └── src/
+│       ├── pages/
+│       │   ├── DashboardPage.jsx      # Linear-style dashboard, agent status, stat cards
+│       │   ├── PatientsPage.jsx       # Full-width patient table, search, pagination
+│       │   ├── PatientPage.jsx        # Detail: Overview + Diagnostics + Billing tabs
+│       │   ├── SecurityPage.jsx       # Anomaly feed, detection rules, audit log
+│       │   ├── SettingsPage.jsx       # Profile, password change, system info
+│       │   └── LoginPage.jsx
+│       └── components/
+│           ├── Sidebar.jsx            # Navy sidebar, Lucide icons, active state
+│           ├── Layout.jsx             # Shared wrapper
+│           ├── DiagnosticsPanel.jsx   # Chat UI, react-markdown, XAI confidence
+│           ├── BillingPanel.jsx       # Itemised invoice, insurance stepper, PDF
+│           ├── AuditLogs.jsx          # Filterable audit log table
+│           └── IntakeForm.jsx         # Patient registration form
+├── backend/
+│   └── src/
+│       ├── routes/
+│       │   ├── patientRoutes.js       # GET /patients, GET /patients/:id/timeline
+│       │   ├── healthRoutes.js        # GET /api/health, GET /api/health/system
+│       │   ├── billingRoutes.js       # POST /billing/:patientId/generate
+│       │   ├── securityRoutes.js      # GET /security/logs, GET /security/alerts
+│       │   ├── diagnosticsRoutes.js
+│       │   └── intakeRoutes.js
+│       ├── controllers/
+│       ├── middleware/
+│       ├── queues/
+│       └── utils/
+├── agents/
+│   ├── intake-agent/
+│   ├── rag-indexer-agent/
+│   ├── diagnostics-agent/
+│   ├── billing-agent/
+│   └── security-agent/
+├── shared/
+├── docker-compose.yaml
+└── README.md
+```
 
 ---
 
 ## Prerequisites
 
-### **Required**
-- Node.js 20.x or higher
-- MongoDB 7.0 or higher
-- Redis 7.0 or higher
-- Google Gemini API Key ([Get it here](https://ai.google.dev/))
-
-### **Recommended**
-- Docker & Docker Compose (for easy deployment)
-- 8GB RAM minimum (for BERT embeddings)
-- Modern browser (Chrome, Firefox, Safari)
+- Node.js 20.x
+- MongoDB 7.0 (local) or MongoDB Atlas
+- Upstash Redis account (or local Redis 7.x)
+- Google Gemini API Key — [get one here](https://ai.google.dev/)
+- 4GB RAM minimum
 
 ---
 
 ## Installation
 
-### **Option 1: Docker (Recommended)**
+### Option 1: Docker (Recommended)
 
-1. **Clone the repository**
-git clone https://github.com/yourusername/imhas.git
-cd imhas
-Set up environment variables
-
-bash
+```bash
+git clone https://github.com/karthicksaai/IMHAS.git
+cd IMHAS
 cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY
-Start all services
-
-bash
+# Add your GEMINI_API_KEY, MONGO_URI, UPSTASH_REDIS_URL, UPSTASH_REDIS_TOKEN
 docker-compose up -d
-Access the application
+```
 
-Frontend: http://localhost:3000
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:5000
 
-Backend API: http://localhost:5001
+### Option 2: Manual
 
-MongoDB: localhost:27017
+```bash
+# 1. Backend
+cd backend && npm install && npm start
 
-Redis: localhost:6379
+# 2. Agents (each in its own terminal)
+cd agents/intake-agent && npm install && npm start
+cd agents/rag-indexer-agent && npm install && npm start
+cd agents/diagnostics-agent && npm install && npm start
+cd agents/billing-agent && npm install && npm start
+cd agents/security-agent && npm install && npm start
 
-Option 2: Manual Setup
-1. Install Dependencies
-bash
-# Backend
-cd backend
-npm install
+# 3. Frontend
+cd frontend && npm install && npm run dev
+```
 
-# Each Agent
-cd ../agents/intake-agent && npm install
-cd ../rag-indexer-agent && npm install
-cd ../diagnostics-agent && npm install
-cd ../billing-agent && npm install
-cd ../security-agent && npm install
+#### Required `.env` values
 
-# Frontend
-cd ../../frontend
-npm install
-2. Set Up Environment
-Create .env files in:
-
-Root directory
-
-backend/.env
-
-agents/intake-agent/.env
-
-agents/rag-indexer-agent/.env
-
-agents/diagnostics-agent/.env
-
-agents/billing-agent/.env
-
-agents/security-agent/.env
-
-frontend/.env
-
-Example .env:
-
-text
+```
 MONGO_URI=mongodb://127.0.0.1:27017/hospital-ai
-REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
-GEMINI_API_KEY=your-key-here
-3. Start Services
-Terminal 1: MongoDB
-
-bash
-mongod --dbpath ./data/db
-Terminal 2: Redis
-
-bash
-redis-server
-Terminal 3: Backend
-
-bash
-cd backend
-npm start
-Terminal 4-8: Agents
-
-bash
-# Terminal 4
-cd agents/intake-agent && npm start
-
-# Terminal 5
-cd agents/rag-indexer-agent && npm start
-
-# Terminal 6
-cd agents/diagnostics-agent && npm start
-
-# Terminal 7
-cd agents/billing-agent && npm start
-
-# Terminal 8
-cd agents/security-agent && npm start
-Terminal 9: Frontend
-
-bash
-cd frontend
-npm run dev
-
-Usage
-1. Patient Intake
-Login to the dashboard (default: any email/password in dev mode)
-
-Click "Register New Patient"
-
-Fill in patient details:
-
-Name
-
-Age
-
-Upload medical document (PDF/TXT)
-
-Submit and wait for processing (~5-10 seconds)
-
-2. AI Diagnostics
-Navigate to patient details page
-
-Click "AI Diagnostics" tab
-
-Ask questions like:
-
-"What are the patient's main symptoms?"
-
-"What diagnosis do you suggest?"
-
-"Any allergies or medication conflicts?"
-
-Get AI-powered responses with source citations
-
-3. Billing Optimization
-Go to patient's "Billing" tab
-
-Add treatments/medications with costs
-
-Click "Optimize Costs"
-
-View AI-suggested alternatives and savings
-
-4. Security Monitoring
-Navigate to Security Dashboard
-
-View real-time audit logs
-
-Check anomaly alerts
-
-Filter by user, action, or anomaly status
-
-
-Endpoints
-Patients
-text
-GET    /patients              # List all patients
-GET    /patients/:id          # Get patient details
-GET    /patients/:id/documents
-GET    /patients/:id/diagnostics
-GET    /patients/:id/billing
-PUT    /patients/:id          # Update patient
-Intake
-text
-POST   /intake                # Register new patient
-                              # Body: FormData with name, age, file
-Diagnostics
-text
-POST   /diagnostics           # Create diagnostic query
-                              # Body: { patientId, question }
-GET    /diagnostics/patient/:patientId
-GET    /diagnostics/:id
-Billing
-text
-POST   /billing               # Optimize billing
-                              # Body: { patientId, treatments }
-GET    /billing/patient/:patientId
-GET    /billing/:id
-Security
-text
-POST   /security/log          # Log access event
-GET    /security/logs         # Get audit logs
-GET    /security/alerts       # Get anomalies
-
-Agents
-1. Intake Agent
-Queue: intake
-
-Purpose: Extract structured medical data from documents
-
-Process:
-
-Receive patient data + document
-
-Parse document using Gemini LLM
-
-Extract allergies, medications, conditions, vitals
-
-Update patient record
-
-Trigger RAG indexing
-
-2. RAG Indexer Agent
-Queue: rag
-
-Purpose: Create searchable embeddings
-
-Process:
-
-Receive document text
-
-Chunk text (500 chars, 100 overlap)
-
-Generate BERT embeddings (384-dim)
-
-Store in MongoDB
-
-3. Diagnostics Agent
-Queue: diagnostics
-
-Purpose: Answer medical questions
-
-Process:
-
-Receive question
-
-Embed question (BERT)
-
-Retrieve top-6 similar chunks (cosine similarity)
-
-Generate response using Gemini + context
-
-Return answer with confidence score
-
-4. Billing Agent
-Queue: billing
-
-Purpose: Optimize treatment costs
-
-Process:
-
-Receive treatments list
-
-For each treatment, find alternatives
-
-Use Gemini to select best option
-
-Apply discount rules
-
-Calculate savings
-
-5. Security Agent
-Queue: security
-
-Purpose: Detect anomalies
-
-Detections:
-
-Odd-hour access (0-5 AM)
-
-Rapid patient access (5+ in 60s)
-
-Brute force attempts (3+ failed logins)
-
-Dangerous operations (deletions)
-
-Suspicious patterns
-
-Testing
-Run Backend Tests
-bash
-cd backend
-npm test
-Run Frontend Tests
-bash
-cd frontend
-npm test
-Manual Testing
-Use Postman/Insomnia for API testing
-
-Import collection from docs/postman_collection.json
-
-Troubleshooting
-Problem: Agents not processing jobs
-Check Redis connection: redis-cli ping
-
-Verify MongoDB: mongosh
-
-Check agent logs: docker logs imhas-intake-agent
-
-Problem: Embeddings generation slow
-First-time model download takes 2-3 minutes
-
-Subsequent runs are fast (model cached)
-
-Problem: Gemini API errors
-Verify API key in .env
-
-Check quota: https://ai.google.dev/
-
-Rate limit: 60 requests/minute
-
-Contributing
-Contributions are welcome! Please follow these steps:
-
-Fork the repository
-
-Create a feature branch (git checkout -b feature/amazing-feature)
-
-Commit changes (git commit -m 'Add amazing feature')
-
-Push to branch (git push origin feature/amazing-feature)
-
-Open a Pull Request
-
-License
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-
-Acknowledgments
-Google Gemini for LLM capabilities
-
-Xenova for Transformers.js
-
-MongoDB team for excellent documentation
-
-BullMQ for robust queue management
-
-Support
-For issues and questions:
-
-GitHub Issues: Create an issue
-
-Email: support@imhas.com
-
-Documentation: Full Docs
-
-Roadmap
- Add user authentication (JWT)
-
- Implement role-based access control (RBAC)
-
- Add real-time notifications (WebSockets)
-
- Integrate with EHR systems (HL7/FHIR)
-
- Add voice-to-text for patient intake
-
- Multi-language support
-
- Mobile app (React Native)
-
- Advanced analytics dashboard
-
-Made with ❤️ for better healthcare
-
-text
-
-***
-
-## **LICENSE** (Root Level)
-MIT License
-
-Copyright (c) 2026 IMHAS Team
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-CMD ["node", "src/index.js"]
+UPSTASH_REDIS_URL=https://your-upstash-endpoint
+UPSTASH_REDIS_TOKEN=your-token
+GEMINI_API_KEY=your-key
+JWT_SECRET=your-secret
+```
+
+---
+
+## API Reference
+
+### Patients
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/patients` | List all patients |
+| GET | `/api/patients/:id` | Single patient |
+| GET | `/api/patients/:id/documents` | Documents list |
+| POST | `/api/patients/:id/documents` | Upload documents (multi-file) |
+| GET | `/api/patients/:id/rag-status` | RAG index status for patient |
+| GET | `/api/patients/:id/timeline` | Federated event timeline |
+
+### Health / System
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/health` | Agent heartbeat status + queue depth |
+| GET | `/api/health/system` | MongoDB, Redis, Gemini API status |
+
+### Diagnostics
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/diagnostics` | Submit diagnostic question |
+| GET | `/api/diagnostics/patient/:patientId` | History for patient |
+| GET | `/api/diagnostics/:id` | Single diagnostic result |
+| PATCH | `/api/diagnostics/:id/review` | Approve / reject (HITL) |
+
+### Billing
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/billing/:patientId/generate` | Trigger billing agent — itemised invoice |
+| GET | `/api/billing/:patientId` | Bill history |
+| GET | `/api/billing/:id` | Single bill |
+
+### Intake
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/intake` | Register new patient (FormData) |
+
+### Security
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/security/log` | Log access event |
+| GET | `/api/security/logs` | Audit logs (filter: all/anomaly/hitl) |
+| GET | `/api/security/alerts` | Anomaly events |
+| GET | `/api/security/anomalies` | Live anomaly feed with severity |
+
+---
+
+## Agents
+
+### Intake Agent
+- **Queue**: `intake`
+- Parses uploaded medical documents with Gemini
+- Extracts: allergies, medications, conditions, vitals
+- Updates patient record in MongoDB
+- Enqueues RAG indexing job automatically
+
+### RAG Indexer Agent
+- **Queue**: `rag`
+- Chunks document text (500 chars, 100 char overlap)
+- Generates 768-dim embeddings via `gemini-embedding-001`
+- Stores chunks in `embeddings` collection
+- Supports multiple documents per patient
+
+### Diagnostics Agent
+- **Queue**: `diagnostics`
+- Embeds the clinical question using `gemini-embedding-001`
+- Retrieves top-K similar chunks via cosine similarity across all patient documents
+- Builds prompt with retrieved context
+- Generates response + confidence score + top chunk similarity via `gemini-2.5-flash`
+- Stores result in `diagnostics` collection with `approvalStatus: pending`
+
+### Billing Agent
+- **Queue**: `billing`
+- Reads patient's medical history, diagnoses, and medications from MongoDB
+- Uses Gemini to generate itemised invoice (consultation, AI analysis, document processing, medications)
+- Stores result in `billingproposals` collection
+- Supports insurance claim status tracking
+
+### Security Agent
+- **Queue**: `security`
+- Runs 5 detection rules on every access log event:
+  1. Odd-hour access (00:00–05:00)
+  2. Rapid patient access (5+ records in 60 seconds)
+  3. Brute-force attempts (3+ failed logins)
+  4. Dangerous operations (DELETE / bulk update)
+  5. Suspicious access patterns
+- Writes anomaly events to `auditlogs` collection with severity level
+
+---
+
+## UI Pages
+
+### Dashboard (`/`)
+- 4 stat cards: Total Patients, Registered Today, AI Diagnostics Today, Avg Processing Time
+- Recent patients table (name, age, status, registered date, view button)
+- System Status panel: each agent with live green/red dot, queue depth, last job timestamp
+- Real-time search filtering patient list
+- Polls `/api/health` every 10 seconds
+
+### Patients (`/patients`)
+- Full-width table: Avatar, Name, Age, Gender, Blood Type, Status, Registered, Actions
+- Search + status filter bar
+- 10-per-page pagination
+- Row click navigates to patient detail
+
+### Patient Detail (`/patients/:id`)
+
+**Overview Tab**
+- Two-column layout: patient info fields (label: value) + Medical Documents section
+- Medical Documents: per-file name, upload date, size, processing status badge
+- Status polls every 3 seconds after upload until status = Indexed
+- RAG Index Status row: `gemini-embedding-001 · 768 dimensions · N chunks · Indexed`
+- Federated Patient Timeline: all agent events in chronological order
+
+**AI Diagnostics Tab**
+- Chat-style interface with markdown rendering (react-markdown)
+- AI response includes: confidence progress bar, evidence chunk count, top similarity score, grounded excerpt
+- Approve / Reject buttons (HITL) — stored in audit trail
+- Collapsed accordion for past Q&As
+
+**Billing Tab**
+- Itemised invoice: Consultation, AI Analysis, Document Processing, Medications
+- Insurance claim stepper: Pending → Submitted → Approved / Rejected
+- Generate Bill button triggers billing agent
+- PDF export
+- Bill history table
+
+### Security (`/security`)
+- Live anomaly feed table with severity badges
+- Detection rules panel: toggle on/off, editable thresholds, trigger count
+- 24-hour threat sparkline chart (recharts)
+- Audit log table: filters All / Normal / Anomaly / HITL Events + date range + search
+
+### Settings (`/settings`)
+- Profile: name, email, role (read-only)
+- Change Password form
+- System Info: MongoDB status, Redis status, Gemini API status
+- About: IMHAS v2.0, full tech stack
+
+---
+
+## Roadmap
+
+- [ ] WebSocket real-time push for agent job completion (replace polling)
+- [ ] FHIR R4 patient data export
+- [ ] Voice-to-text patient intake
+- [ ] Multi-tenant hospital support
+- [ ] Mobile app (React Native)
+- [ ] Advanced analytics with time-series patient trends
+
+---
+
+## License
+
+MIT License — see [LICENSE](LICENSE) for details.
