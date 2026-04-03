@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Worker } from "bullmq";
+import { Worker, Queue } from "bullmq";
 import { connectDB } from "../../../shared/config/db.js";
 import { redisConnection } from "../../../shared/config/redis.js";
 import Diagnostic from "../../../shared/models/Diagnostic.js";
@@ -8,7 +8,10 @@ import { generateDiagnosticResponse } from "./llmClient.js";
 
 await connectDB(process.env.MONGO_URI);
 
-// ── Heartbeat ─────────────────────────────────────────────────────────────────
+// Queue reference for auto-triggering second opinions
+const diagnosticsQueue = new Queue("diagnostics", { connection: redisConnection });
+
+// Heartbeat
 const BACKEND = process.env.BACKEND_URL || "http://localhost:5000";
 const AGENT_NAME = "diagnostics";
 let jobsProcessedToday = 0;
@@ -23,7 +26,6 @@ function sendHeartbeat() {
 
 setInterval(sendHeartbeat, 15000);
 sendHeartbeat();
-// ─────────────────────────────────────────────────────────────────────────────
 
 console.log("Diagnostics Agent starting...");
 
@@ -45,7 +47,7 @@ const diagnosticsWorker = new Worker(
 
       await Diagnostic.findByIdAndUpdate(diagnosticId, { status: "processing" });
 
-      // 1. Retrieve relevant chunks via RAG
+      // 1. Retrieve relevant chunks via RAG (recency-weighted)
       const topK = parseInt(process.env.TOP_K) || 6;
       const relevantChunks = await retrieveRelevantChunks(patientId, question, topK);
 
@@ -59,59 +61,90 @@ const diagnosticsWorker = new Worker(
           rejected: true,
           rejectionReason: "No medical records found for this patient. Please upload documents first.",
           approvalStatus: "pending_review",
+          hitlBand: "second_opinion",
           processingTime: Date.now() - startTime,
         });
         return { status: "no_context", diagnosticId };
       }
 
-      // 2. Generate response — may be rejected by confidence threshold
-      const { response, confidence, rejected, rejectionReason } = await generateDiagnosticResponse(
-        question,
-        relevantChunks,
-        { isSecondOpinion }
-      );
+      // 2. Generate response with HITL band logic
+      const { response, confidence, hitlBand, approvalStatus, rejected, rejectionReason } =
+        await generateDiagnosticResponse(question, relevantChunks, { isSecondOpinion });
 
       const processingTime = Date.now() - startTime;
 
+      console.log(`Confidence: ${confidence}% -> hitlBand: ${hitlBand}`);
+
       if (rejected) {
-        console.log(`❌ Diagnostic rejected due to low confidence (${confidence}%)`);
+        console.log(`Diagnostic rejected — band: ${hitlBand} (${confidence}%)`);
         await Diagnostic.findByIdAndUpdate(diagnosticId, {
           response: null,
           rejected: true,
           rejectionReason,
           confidence,
+          hitlBand,
           status: "completed",
           approvalStatus: "rejected",
           retrievedChunks: relevantChunks.map((c) => ({
             text: c.text,
             similarity: c.similarity,
+            finalScore: c.finalScore,
             chunkId: c.chunkId,
           })),
           processingTime,
         });
-        return { status: "rejected_low_confidence", diagnosticId, confidence };
+
+        // Auto-queue second opinion when band is second_opinion and this is not already one
+        if (hitlBand === "second_opinion" && !isSecondOpinion) {
+          console.log("Auto-queuing second opinion due to second_opinion band...");
+          const soDoc = await Diagnostic.create({
+            patientId,
+            question,
+            status: "pending",
+            approvalStatus: "pending_review",
+            isSecondOpinion: true,
+            originalDiagnosticId: diagnosticId,
+            hitlBand: "second_opinion",
+          });
+          await diagnosticsQueue.add("diagnose", {
+            diagnosticId: soDoc._id.toString(),
+            patientId,
+            question,
+            isSecondOpinion: true,
+          });
+          console.log(`Second opinion queued: ${soDoc._id}`);
+        }
+
+        return { status: "rejected_low_confidence", diagnosticId, confidence, hitlBand };
       }
 
-      // 3. Save successful result — awaits doctor approval
+      // 3. Save successful result with hitlBand and resolved approvalStatus
       await Diagnostic.findByIdAndUpdate(diagnosticId, {
         response,
         retrievedChunks: relevantChunks.map((c) => ({
           text: c.text,
           similarity: c.similarity,
+          finalScore: c.finalScore,
           chunkId: c.chunkId,
         })),
         confidence,
+        hitlBand,
         status: "completed",
-        approvalStatus: "pending_review",
+        approvalStatus: approvalStatus || "pending_review",
         isSecondOpinion: isSecondOpinion || false,
         processingTime,
       });
 
+      if (hitlBand === "auto_approve") {
+        console.log(`Diagnostic auto-approved (confidence: ${confidence}% >= 90%)`);
+      } else {
+        console.log(`Diagnostic completed (confidence: ${confidence}%) — band: ${hitlBand} — awaiting doctor review`);
+      }
+
       jobsProcessedToday++;
       sendHeartbeat();
 
-      console.log(`✅ Diagnostic completed (confidence: ${confidence}%) — awaiting doctor review`);
-      return { status: "success", diagnosticId, confidence, processingTime };
+      return { status: "success", diagnosticId, confidence, hitlBand, processingTime };
     } catch (error) {
       console.error(`[Diagnostics Agent] Job ${job.id} failed:`, error);
       if (job.data.diagnosticId) {
