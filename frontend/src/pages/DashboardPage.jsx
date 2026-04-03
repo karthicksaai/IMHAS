@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Search, UserPlus, RefreshCw, TrendingUp } from 'lucide-react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
+import HITLDashboard from '../components/HITLDashboard';
 
 const API = 'http://localhost:5000';
 
@@ -29,7 +30,7 @@ function StatCard({ label, value, trend }) {
     <div className="border border-[#e5e7eb] rounded-lg p-5 bg-white">
       <p className="text-xs font-medium text-[#6b7280] uppercase tracking-wide mb-2">{label}</p>
       <div className="flex items-end justify-between">
-        <span className="text-3xl font-bold text-gray-900">{value ?? '—'}</span>
+        <span className="text-3xl font-bold text-gray-900">{value ?? '\u2014'}</span>
         {trend != null && (
           <span className="flex items-center gap-1 text-xs text-[#16a34a] font-medium mb-1">
             <TrendingUp className="w-3 h-3" />{trend}
@@ -105,7 +106,7 @@ export default function DashboardPage() {
   }, [search, patients]);
 
   function formatDate(d) {
-    if (!d) return '—';
+    if (!d) return '\u2014';
     return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   }
 
@@ -117,8 +118,8 @@ export default function DashboardPage() {
   }
 
   const agentStatus = health.agents || {};
-  const diagToday = health.diagnosticsToday ?? '—';
-  const avgTime = health.avgProcessingMs ? `${(health.avgProcessingMs / 1000).toFixed(1)}s` : '—';
+  const diagToday = health.diagnosticsToday ?? '\u2014';
+  const avgTime = health.avgProcessingMs ? `${(health.avgProcessingMs / 1000).toFixed(1)}s` : '\u2014';
 
   return (
     <Layout>
@@ -200,7 +201,7 @@ export default function DashboardPage() {
                             <span className="font-medium text-gray-900">{p.name}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-[#6b7280]">{p.age || '—'}</td>
+                        <td className="px-4 py-3 text-[#6b7280]">{p.age || '\u2014'}</td>
                         <td className="px-4 py-3">{statusBadge(p.status)}</td>
                         <td className="px-4 py-3 text-[#6b7280]">{formatDate(p.createdAt || p.registeredAt)}</td>
                         <td className="px-4 py-3">
@@ -251,6 +252,11 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Research Metrics */}
+        <div className="mt-6">
+          <HITLDashboard />
         </div>
       </div>
     </Layout>
