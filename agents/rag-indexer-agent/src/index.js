@@ -8,6 +8,23 @@ import { storeVectors } from "./vectorStore.js";
 
 await connectDB(process.env.MONGO_URI);
 
+// ── Heartbeat ─────────────────────────────────────────────────────────────────
+const BACKEND = process.env.BACKEND_URL || "http://localhost:5000";
+const AGENT_NAME = "rag-indexer";
+let jobsProcessedToday = 0;
+
+function sendHeartbeat() {
+  fetch(`${BACKEND}/api/health/heartbeat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agent: AGENT_NAME, jobsProcessedToday }),
+  }).catch(() => {});
+}
+
+setInterval(sendHeartbeat, 15000);
+sendHeartbeat();
+// ─────────────────────────────────────────────────────────────────────────────
+
 console.log("RAG Indexer Agent starting...");
 console.log("Queue: rag");
 console.log("Redis:", process.env.REDIS_HOST);
@@ -45,6 +62,9 @@ const ragWorker = new Worker(
     // 3. Store
     const stored = await storeVectors({ patientId, docId, chunks, vectors, metadata });
     console.log(`Stored  : ${stored} embeddings`);
+
+    jobsProcessedToday++;
+    sendHeartbeat();
 
     const ms = Date.now() - startTime;
     console.log(`Done in ${ms}ms`);
