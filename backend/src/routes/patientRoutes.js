@@ -1,8 +1,18 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import { authenticate } from '../middleware/auth.js';
-import Patient from '../../../../shared/models/Patient.js';
-import Document from '../../../../shared/models/Document.js';
+import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+import path from 'path';
+
+// Resolve shared models using absolute path derived from this file's location
+// Structure: IMHAS/IMHAS/backend/src/routes/patientRoutes.js
+//            IMHAS/IMHAS/shared/models/Patient.js
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const sharedModels = path.resolve(__dirname, '../../..', 'shared', 'models');
+
+const { default: Patient } = await import(path.join(sharedModels, 'Patient.js').replace(/\\/g, '/'));
+const { default: Document } = await import(path.join(sharedModels, 'Document.js').replace(/\\/g, '/'));
 
 const router = express.Router();
 
@@ -27,7 +37,7 @@ router.get('/:id', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/patients/:id/documents — documents for a patient
+// GET /api/patients/:id/documents
 router.get('/:id/documents', authenticate, async (req, res) => {
   try {
     const docs = await Document.find({ patientId: req.params.id }).sort({ createdAt: -1 }).lean();
@@ -37,7 +47,7 @@ router.get('/:id/documents', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/patients/:id/documents — upload documents
+// POST /api/patients/:id/documents
 router.post('/:id/documents', authenticate, async (req, res) => {
   try {
     const files = req.files?.documents;
@@ -90,31 +100,14 @@ router.get('/:id/timeline', authenticate, async (req, res) => {
 
     try {
       const p = await Patient.findById(pid).lean();
-      if (p) events.push({
-        type: 'registration',
-        label: 'Patient Registered',
-        timestamp: p.createdAt,
-        description: 'Registered via intake agent',
-      });
+      if (p) events.push({ type: 'registration', label: 'Patient Registered', timestamp: p.createdAt, description: 'Registered via intake agent' });
     } catch {}
 
     try {
       const docs = await Document.find({ patientId: pid }).sort({ createdAt: 1 }).lean();
       for (const doc of docs) {
-        events.push({
-          type: 'document_upload',
-          label: `Document Uploaded: ${doc.fileName || 'Unknown file'}`,
-          timestamp: doc.createdAt || doc.uploadedAt,
-          description: doc.fileSize ? `${(doc.fileSize / 1024).toFixed(1)} KB` : '',
-        });
-        if (doc.status === 'indexed') {
-          events.push({
-            type: 'rag_indexed',
-            label: 'RAG Index Updated',
-            timestamp: doc.updatedAt || doc.createdAt,
-            description: 'Document chunks embedded and stored',
-          });
-        }
+        events.push({ type: 'document_upload', label: `Document Uploaded: ${doc.fileName || 'Unknown file'}`, timestamp: doc.createdAt || doc.uploadedAt, description: doc.fileSize ? `${(doc.fileSize / 1024).toFixed(1)} KB` : '' });
+        if (doc.status === 'indexed') events.push({ type: 'rag_indexed', label: 'RAG Index Updated', timestamp: doc.updatedAt || doc.createdAt, description: 'Document chunks embedded and stored' });
       }
     } catch {}
 
@@ -131,17 +124,13 @@ router.get('/:id/timeline', authenticate, async (req, res) => {
     try {
       const Billing = mongoose.model('BillingProposal');
       const bills = await Billing.find({ patientId: pid }).sort({ createdAt: 1 }).lean();
-      for (const b of bills) {
-        events.push({ type: 'billing_generated', label: 'Bill Generated', timestamp: b.createdAt, description: b.totalAmount ? `Total: ${b.totalAmount.toFixed(2)}` : '' });
-      }
+      for (const b of bills) events.push({ type: 'billing_generated', label: 'Bill Generated', timestamp: b.createdAt, description: b.totalAmount ? `Total: ${b.totalAmount.toFixed(2)}` : '' });
     } catch {}
 
     try {
       const AuditLog = mongoose.model('AuditLog');
       const anomalies = await AuditLog.find({ patientId: pid, type: 'anomaly' }).sort({ timestamp: 1 }).lean();
-      for (const a of anomalies) {
-        events.push({ type: 'anomaly_detected', label: 'Security Anomaly Detected', timestamp: a.timestamp || a.createdAt, description: a.description || a.action });
-      }
+      for (const a of anomalies) events.push({ type: 'anomaly_detected', label: 'Security Anomaly Detected', timestamp: a.timestamp || a.createdAt, description: a.description || a.action });
     } catch {}
 
     events.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
