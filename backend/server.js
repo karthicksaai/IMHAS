@@ -35,6 +35,14 @@ const startServer = async () => {
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
+    // Register all Mongoose models BEFORE routes load so mongoose.model() never throws
+    await import("../shared/models/Patient.js");
+    await import("../shared/models/Document.js");
+    await import("../shared/models/Diagnostic.js");
+    await import("../shared/models/BillingProposal.js");
+    await import("../shared/models/AuditLog.js");
+    await import("../shared/models/Embedding.js");
+
     await import('../shared/models/Patient.js');
 
     const { default: patientRoutes } = await import("./src/routes/patientRoutes.js");

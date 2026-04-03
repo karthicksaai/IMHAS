@@ -8,6 +8,23 @@ import { generateDiagnosticResponse } from "./llmClient.js";
 
 await connectDB(process.env.MONGO_URI);
 
+// ── Heartbeat ─────────────────────────────────────────────────────────────────
+const BACKEND = process.env.BACKEND_URL || "http://localhost:5000";
+const AGENT_NAME = "diagnostics";
+let jobsProcessedToday = 0;
+
+function sendHeartbeat() {
+  fetch(`${BACKEND}/api/health/heartbeat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agent: AGENT_NAME, jobsProcessedToday }),
+  }).catch(() => {});
+}
+
+setInterval(sendHeartbeat, 15000);
+sendHeartbeat();
+// ─────────────────────────────────────────────────────────────────────────────
+
 console.log("Diagnostics Agent starting...");
 
 const diagnosticsWorker = new Worker(
@@ -57,7 +74,6 @@ const diagnosticsWorker = new Worker(
       const processingTime = Date.now() - startTime;
 
       if (rejected) {
-        // Confidence too low — log and return rejection, don't give the doctor garbage
         console.log(`❌ Diagnostic rejected due to low confidence (${confidence}%)`);
         await Diagnostic.findByIdAndUpdate(diagnosticId, {
           response: null,
@@ -86,10 +102,13 @@ const diagnosticsWorker = new Worker(
         })),
         confidence,
         status: "completed",
-        approvalStatus: "pending_review", // Doctor must approve before it's official
+        approvalStatus: "pending_review",
         isSecondOpinion: isSecondOpinion || false,
         processingTime,
       });
+
+      jobsProcessedToday++;
+      sendHeartbeat();
 
       console.log(`✅ Diagnostic completed (confidence: ${confidence}%) — awaiting doctor review`);
       return { status: "success", diagnosticId, confidence, processingTime };

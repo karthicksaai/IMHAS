@@ -13,6 +13,23 @@ await connectDB(process.env.MONGO_URI);
 // Initialize RAG queue to trigger indexing
 const ragQueue = new Queue("rag", { connection: redisConnection });
 
+// ── Heartbeat ─────────────────────────────────────────────────────────────────
+const BACKEND = process.env.BACKEND_URL || "http://localhost:5000";
+const AGENT_NAME = "intake";
+let jobsProcessedToday = 0;
+
+function sendHeartbeat() {
+  fetch(`${BACKEND}/api/health/heartbeat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agent: AGENT_NAME, jobsProcessedToday }),
+  }).catch(() => {});
+}
+
+setInterval(sendHeartbeat, 15000);
+sendHeartbeat();
+// ─────────────────────────────────────────────────────────────────────────────
+
 console.log("Intake Agent starting...");
 
 const intakeWorker = new Worker(
@@ -67,10 +84,10 @@ const intakeWorker = new Worker(
       // 5. Advanced document processing
       const processedMetadata = await processDocument(processedText, medicalData);
 
+      console.log("Document metadata:", processedMetadata);
       console.log("Document processing completed");
 
       // 6. Use docId passed directly from the controller (reliable)
-      //    instead of doing an unreliable Document.findOne({ text }) query
       if (docId) {
         console.log(`Sending document ${docId} to RAG indexer...`);
         await ragQueue.add("index-document", {
@@ -81,7 +98,6 @@ const intakeWorker = new Worker(
         });
         console.log("RAG indexing job queued successfully");
       } else {
-        // Fallback: no docId in job data (old job format), try to find doc
         console.log("No docId in job data, attempting fallback document lookup...");
         const doc = await Document.findOne({ patientId }).sort({ createdAt: -1 });
         if (doc) {
@@ -96,6 +112,9 @@ const intakeWorker = new Worker(
           console.log("No document found, skipping RAG indexing");
         }
       }
+
+      jobsProcessedToday++;
+      sendHeartbeat();
 
       const duration = Date.now() - startTime;
       console.log(`\n[Intake Agent] Job ${job.id} completed in ${duration}ms`);
