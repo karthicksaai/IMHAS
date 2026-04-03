@@ -2,12 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { billingApi } from '../api/billingApi';
 import { useAuth } from '../context/AuthContext';
 import {
-  FileText, CheckCircle2, Clock, XCircle, Printer,
-  ChevronRight, Plus, Trash2, AlertTriangle
+  FileText, CheckCircle2, XCircle, Printer,
+  ChevronRight, Loader2, AlertTriangle
 } from 'lucide-react';
 
 const API = 'http://localhost:5000';
-
 const INSURANCE_STEPS = ['Generated', 'Submitted', 'Under Review', 'Approved'];
 
 function InsuranceStepper({ status }) {
@@ -32,7 +31,7 @@ function InsuranceStepper({ status }) {
             }`}>{step}</p>
           </div>
           {i < INSURANCE_STEPS.length - 1 && (
-            <div className={`flex-1 h-px mx-1 mb-4 ${ i < current ? 'bg-[#16a34a]' : 'bg-[#e5e7eb]' }`} />
+            <div className={`flex-1 h-px mx-1 mb-4 ${i < current ? 'bg-[#16a34a]' : 'bg-[#e5e7eb]'}`} />
           )}
         </div>
       ))}
@@ -53,7 +52,7 @@ function BillCard({ bill, onApprove, onReject }) {
     const content = printRef.current?.innerHTML;
     if (!content) return;
     const w = window.open('', '_blank');
-    w.document.write(`<html><head><title>Bill</title><style>body{font-family:sans-serif;padding:32px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #e5e7eb;padding:8px 12px;font-size:13px}th{background:#f9fafb;font-weight:600}</style></head><body>${content}</body></html>`);
+    w.document.write(`<html><head><title>Invoice</title><style>body{font-family:sans-serif;padding:32px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #e5e7eb;padding:8px 12px;font-size:13px}th{background:#f9fafb;font-weight:600}.reasoning{font-size:12px;color:#6b7280;margin-top:16px;padding:12px;background:#f9fafb;border-radius:6px}</style></head><body>${content}</body></html>`);
     w.document.close();
     w.print();
   }
@@ -74,19 +73,28 @@ function BillCard({ bill, onApprove, onReject }) {
             Invoice · {new Date(bill.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
           </span>
         </div>
-        <span className="text-sm font-bold text-gray-900">₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+        <span className="text-sm font-bold text-gray-900">₹{total.toLocaleString('en-IN')}</span>
         <span className="text-xs font-medium shrink-0" style={{ color: statusColor }}>{statusLabel}</span>
       </button>
 
       {expanded && (
         <div className="px-4 pb-4 border-t border-[#e5e7eb]" ref={printRef}>
+
+          {/* AI reasoning banner */}
+          {bill.aiReasoning && (
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+              <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wide mb-1">AI Billing Summary</p>
+              <p className="text-xs text-blue-800 leading-relaxed">{bill.aiReasoning}</p>
+            </div>
+          )}
+
           {/* Line items table */}
-          {items.length > 0 && (
+          {items.length > 0 ? (
             <div className="mt-4">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#e5e7eb]">
-                    <th className="text-left py-2 px-0 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Item</th>
+                    <th className="text-left py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Description</th>
                     <th className="text-left py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Category</th>
                     <th className="text-right py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Amount</th>
                   </tr>
@@ -94,22 +102,36 @@ function BillCard({ bill, onApprove, onReject }) {
                 <tbody className="divide-y divide-[#e5e7eb]">
                   {items.map((item, i) => (
                     <tr key={i}>
-                      <td className="py-2.5 text-gray-900">{item.description || item.name}</td>
-                      <td className="py-2.5 text-[#6b7280]">{item.category || '—'}</td>
-                      <td className="py-2.5 text-right font-medium text-gray-900">
-                        ₹{(item.amount || item.cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      <td className="py-2.5">
+                        <p className="text-gray-900 font-medium">{item.description || item.name}</p>
+                        {item.rationale && (
+                          <p className="text-[11px] text-[#6b7280] mt-0.5">{item.rationale}</p>
+                        )}
+                      </td>
+                      <td className="py-2.5 text-[#6b7280] text-xs">{item.category || '—'}</td>
+                      <td className="py-2.5 text-right font-semibold text-gray-900">
+                        ₹{(item.amount || item.cost || 0).toLocaleString('en-IN')}
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-[#e5e7eb]">
-                    <td colSpan={2} className="py-2.5 font-semibold text-gray-900">Total</td>
-                    <td className="py-2.5 text-right font-bold text-gray-900">₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                  <tr className="border-t-2 border-gray-300">
+                    <td colSpan={2} className="py-2.5 font-bold text-gray-900">Total</td>
+                    <td className="py-2.5 text-right font-bold text-gray-900 text-base">₹{total.toLocaleString('en-IN')}</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
+          ) : (
+            <p className="mt-4 text-sm text-[#6b7280]">No itemized breakdown available.</p>
+          )}
+
+          {/* Savings */}
+          {bill.savingsPercentage > 0 && (
+            <p className="mt-2 text-xs text-[#16a34a] font-medium">
+              ✓ AI optimization applied — {bill.savingsPercentage.toFixed(1)}% discount
+            </p>
           )}
 
           {/* Insurance stepper */}
@@ -117,13 +139,6 @@ function BillCard({ bill, onApprove, onReject }) {
             <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide mb-1">Insurance Claim Status</p>
             <InsuranceStepper status={bill.insuranceStatus || 'pending'} />
           </div>
-
-          {/* Savings info */}
-          {bill.savingsPercentage > 0 && (
-            <p className="mt-3 text-xs text-[#16a34a]">
-              AI optimization saved {bill.savingsPercentage.toFixed(1)}% · Original: ₹{(bill.totalOriginal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </p>
-          )}
 
           {/* Actions */}
           <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#e5e7eb]">
@@ -174,7 +189,7 @@ function BillCard({ bill, onApprove, onReject }) {
           {bill.approvalStatus !== 'pending_review' && bill.reviewedBy && (
             <p className="mt-2 text-[10px] text-[#6b7280]">
               Reviewed by <strong>{bill.reviewedBy}</strong>
-              {bill.reviewNote && <> · {bill.reviewNote}</>}
+              {bill.reviewNote && <> · "{bill.reviewNote}"</>}
             </p>
           )}
         </div>
@@ -188,6 +203,8 @@ export default function BillingPanel({ patientId, patientName }) {
   const [proposals, setProposals] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [pollMsg, setPollMsg] = useState('');
+  const pollRef = useRef(null);
   const headers = { Authorization: `Bearer ${token}` };
 
   const loadBills = async () => {
@@ -196,15 +213,42 @@ export default function BillingPanel({ patientId, patientName }) {
       if (res.ok) {
         const data = await res.json();
         setProposals(Array.isArray(data) ? data : (data.proposals || []));
+        return Array.isArray(data) ? data.length : (data.proposals?.length || 0);
       }
     } catch {}
     finally { setLoading(false); }
+    return 0;
   };
 
   useEffect(() => { loadBills(); }, [patientId]);
 
+  // Poll every 3s until a new bill appears (Gemini can take 10-20s)
+  function startPolling(prevCount) {
+    let attempts = 0;
+    const maxAttempts = 15; // 45 seconds max
+    setPollMsg('Generating bill with AI... this takes ~15 seconds');
+
+    pollRef.current = setInterval(async () => {
+      attempts++;
+      const count = await loadBills();
+      if (count > prevCount) {
+        // New bill arrived
+        clearInterval(pollRef.current);
+        setPollMsg('');
+        setGenerating(false);
+      } else if (attempts >= maxAttempts) {
+        clearInterval(pollRef.current);
+        setPollMsg('Bill generation is taking longer than expected. Refresh manually.');
+        setGenerating(false);
+      }
+    }, 3000);
+  }
+
+  useEffect(() => () => clearInterval(pollRef.current), []);
+
   async function handleGenerate() {
     setGenerating(true);
+    setPollMsg('');
     try {
       const res = await fetch(`${API}/api/billing/${patientId}/generate`, {
         method: 'POST',
@@ -212,29 +256,35 @@ export default function BillingPanel({ patientId, patientName }) {
         body: JSON.stringify({ patientName }),
       });
       if (res.ok) {
-        setTimeout(loadBills, 5000);
+        const prevCount = proposals.length;
+        startPolling(prevCount);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setPollMsg(`Error: ${err.error || 'Failed to start bill generation'}`);
+        setGenerating(false);
       }
-    } catch {}
-    finally { setGenerating(false); }
+    } catch (e) {
+      setPollMsg(`Network error: ${e.message}`);
+      setGenerating(false);
+    }
   }
 
   async function handleApprove(id, reviewNote) {
     try {
-      await billingApi.reviewBilling(id, { approvalStatus: 'approved', reviewNote, reviewedBy: user?.name || 'doctor' });
+      await billingApi.reviewBilling(id, { approvalStatus: 'approved', reviewNote, reviewedBy: user?.name || 'doctor' }, token);
       setProposals(prev => prev.map(p => p._id === id ? { ...p, approvalStatus: 'approved', reviewNote, reviewedBy: user?.name } : p));
     } catch {}
   }
 
   async function handleReject(id, reviewNote) {
     try {
-      await billingApi.reviewBilling(id, { approvalStatus: 'rejected', reviewNote, reviewedBy: user?.name || 'doctor' });
+      await billingApi.reviewBilling(id, { approvalStatus: 'rejected', reviewNote, reviewedBy: user?.name || 'doctor' }, token);
       setProposals(prev => prev.map(p => p._id === id ? { ...p, approvalStatus: 'rejected', reviewNote, reviewedBy: user?.name } : p));
     } catch {}
   }
 
   return (
     <div className="space-y-5">
-      {/* Generate button */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-gray-900">Billing Intelligence</h2>
@@ -245,12 +295,25 @@ export default function BillingPanel({ patientId, patientName }) {
           disabled={generating}
           className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-[#2563eb] rounded-lg hover:bg-[#1d4ed8] disabled:opacity-50 transition-colors"
         >
-          <FileText className="w-4 h-4" />
-          {generating ? 'Generating...' : 'Generate Bill'}
+          {generating
+            ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
+            : <><FileText className="w-4 h-4" /> Generate Bill</>
+          }
         </button>
       </div>
 
-      {/* Bill history */}
+      {/* Status message while polling */}
+      {pollMsg && (
+        <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border ${
+          pollMsg.startsWith('Error') || pollMsg.includes('longer')
+            ? 'bg-red-50 border-red-100 text-red-700'
+            : 'bg-blue-50 border-blue-100 text-blue-700'
+        }`}>
+          {generating && <Loader2 className="w-3 h-3 animate-spin shrink-0" />}
+          {pollMsg}
+        </div>
+      )}
+
       {loading ? (
         <div className="py-8 text-center text-sm text-[#6b7280]">Loading billing history...</div>
       ) : proposals.length === 0 ? (
