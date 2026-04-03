@@ -46,7 +46,9 @@ function BillCard({ bill, onApprove, onReject, onDelete }) {
   const [deleting, setDeleting] = useState(false);
   const printRef = useRef(null);
 
-  const isBroken = !bill.lineItems?.length && !bill.itemizedBill?.length;
+  const items = bill.lineItems?.length ? bill.lineItems : (bill.itemizedBill || []);
+  const isBroken = items.length === 0;
+  const total = bill.totalAmount || bill.totalOptimized || 0;
   const statusColor = bill.approvalStatus === 'approved' ? '#16a34a' : bill.approvalStatus === 'rejected' ? '#dc2626' : '#d97706';
   const statusLabel = bill.approvalStatus === 'approved' ? 'Approved' : bill.approvalStatus === 'rejected' ? 'Rejected' : 'Pending Review';
 
@@ -54,7 +56,7 @@ function BillCard({ bill, onApprove, onReject, onDelete }) {
     const content = printRef.current?.innerHTML;
     if (!content) return;
     const w = window.open('', '_blank');
-    w.document.write(`<html><head><title>Invoice – ${bill._id}</title><style>body{font-family:sans-serif;padding:32px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #e5e7eb;padding:8px 12px;font-size:13px}th{background:#f9fafb;font-weight:600}.reasoning{font-size:12px;color:#6b7280;margin-top:16px;padding:12px;background:#f9fafb;border-radius:6px}</style></head><body>${content}</body></html>`);
+    w.document.write(`<html><head><title>Invoice \u2013 ${bill._id}</title><style>body{font-family:sans-serif;padding:32px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #e5e7eb;padding:8px 12px;font-size:13px}th{background:#f9fafb;font-weight:600}</style></head><body>${content}</body></html>`);
     w.document.close();
     w.print();
   }
@@ -65,29 +67,24 @@ function BillCard({ bill, onApprove, onReject, onDelete }) {
     await onDelete(bill._id);
   }
 
-  const items = bill.lineItems?.length ? bill.lineItems : (bill.itemizedBill || []);
-  const total = bill.totalAmount || bill.totalOptimized || 0;
-
   return (
-    <div className={`border rounded-lg overflow-hidden ${
-      isBroken ? 'border-orange-200 bg-orange-50/30' : 'border-[#e5e7eb]'
-    }`}>
+    <div className={`border rounded-lg overflow-hidden ${isBroken ? 'border-orange-200 bg-orange-50/30' : 'border-[#e5e7eb]'}`}>
+      {/* Header row — always clickable */}
       <div className="flex items-center gap-3 px-4 py-3">
         <button onClick={() => setExpanded(v => !v)} className="flex items-center gap-3 flex-1 text-left hover:opacity-80">
           <ChevronRight className={`w-4 h-4 text-[#6b7280] shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
           <FileText className={`w-4 h-4 shrink-0 ${isBroken ? 'text-orange-400' : 'text-[#6b7280]'}`} />
           <div className="flex-1">
             <span className="text-sm font-medium text-gray-900">
-              Invoice · {new Date(bill.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              Invoice \u00b7 {new Date(bill.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
             </span>
             {isBroken && (
-              <span className="ml-2 text-[10px] text-orange-500 font-medium">(no breakdown — delete &amp; regenerate)</span>
+              <span className="ml-2 text-[10px] text-orange-500 font-medium">(no breakdown \u2014 billing agent needs restart)</span>
             )}
           </div>
-          <span className="text-sm font-bold text-gray-900">₹{total.toLocaleString('en-IN')}</span>
+          <span className="text-sm font-bold text-gray-900">\u20b9{total.toLocaleString('en-IN')}</span>
           <span className="text-xs font-medium shrink-0" style={{ color: statusColor }}>{statusLabel}</span>
         </button>
-        {/* Delete button always visible */}
         <button
           onClick={handleDelete}
           disabled={deleting}
@@ -98,111 +95,133 @@ function BillCard({ bill, onApprove, onReject, onDelete }) {
         </button>
       </div>
 
-      {expanded && !isBroken && (
-        <div className="px-4 pb-4 border-t border-[#e5e7eb]" ref={printRef}>
-          {bill.aiReasoning && (
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg reasoning">
-              <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wide mb-1">AI Billing Summary</p>
-              <p className="text-xs text-blue-800 leading-relaxed">{bill.aiReasoning}</p>
+      {/* Expanded body — shown for ALL bills, broken or not */}
+      {expanded && (
+        <div className="px-4 pb-4 border-t border-[#e5e7eb]">
+          {isBroken ? (
+            /* Broken bill — show helpful debug info */
+            <div className="mt-3 space-y-3">
+              <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                <p className="text-xs font-semibold text-orange-800 mb-1">\u26a0\ufe0f No line items saved</p>
+                <p className="text-xs text-orange-700 leading-relaxed">
+                  The billing agent saved this bill without line items. This means the agent process was <strong>not restarted</strong> after the schema fix.
+                </p>
+                <p className="text-xs text-orange-700 mt-2 font-mono bg-orange-100 rounded p-2">
+                  # Stop your billing agent, then run:<br />
+                  cd agents/billing-agent &amp;&amp; node src/index.js
+                </p>
+              </div>
+              <p className="text-[10px] text-gray-400">Bill ID: {bill._id}</p>
+              <p className="text-[10px] text-gray-400">Saved: {new Date(bill.createdAt).toLocaleString('en-IN')}</p>
             </div>
-          )}
+          ) : (
+            /* Good bill — full itemized view */
+            <div ref={printRef}>
+              {bill.aiReasoning && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                  <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wide mb-1">AI Billing Summary</p>
+                  <p className="text-xs text-blue-800 leading-relaxed">{bill.aiReasoning}</p>
+                </div>
+              )}
 
-          <div className="mt-4">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#e5e7eb]">
-                  <th className="text-left py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Description</th>
-                  <th className="text-left py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Category</th>
-                  <th className="text-right py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#e5e7eb]">
-                {items.map((item, i) => (
-                  <tr key={i}>
-                    <td className="py-2.5">
-                      <p className="text-gray-900 font-medium">{item.description || item.name}</p>
-                      {item.rationale && (
-                        <p className="text-[11px] text-[#6b7280] mt-0.5 italic">{item.rationale}</p>
-                      )}
-                    </td>
-                    <td className="py-2.5">
-                      <span className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">
-                        {item.category || '—'}
-                      </span>
-                    </td>
-                    <td className="py-2.5 text-right font-semibold text-gray-900">
-                      ₹{(item.amount || item.cost || 0).toLocaleString('en-IN')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-gray-300">
-                  <td colSpan={2} className="py-3 font-bold text-gray-900">Total</td>
-                  <td className="py-3 text-right font-bold text-gray-900 text-base">₹{total.toLocaleString('en-IN')}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+              <div className="mt-4">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#e5e7eb]">
+                      <th className="text-left py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Description</th>
+                      <th className="text-left py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Category</th>
+                      <th className="text-right py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#e5e7eb]">
+                    {items.map((item, i) => (
+                      <tr key={i}>
+                        <td className="py-2.5">
+                          <p className="text-gray-900 font-medium">{item.description || item.name}</p>
+                          {item.rationale && (
+                            <p className="text-[11px] text-[#6b7280] mt-0.5 italic">{item.rationale}</p>
+                          )}
+                        </td>
+                        <td className="py-2.5">
+                          <span className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">
+                            {item.category || '\u2014'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-right font-semibold text-gray-900">
+                          \u20b9{(item.amount || item.cost || 0).toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-300">
+                      <td colSpan={2} className="py-3 font-bold text-gray-900">Total</td>
+                      <td className="py-3 text-right font-bold text-gray-900 text-base">\u20b9{total.toLocaleString('en-IN')}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
 
-          {bill.savingsPercentage > 0 && (
-            <p className="mt-2 text-xs text-[#16a34a] font-medium">
-              ✓ {bill.savingsPercentage.toFixed(1)}% discount applied
-            </p>
-          )}
+              {bill.savingsPercentage > 0 && (
+                <p className="mt-2 text-xs text-[#16a34a] font-medium">
+                  \u2713 {bill.savingsPercentage.toFixed(1)}% discount applied
+                </p>
+              )}
 
-          <div className="mt-4 pt-3 border-t border-[#e5e7eb]">
-            <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide mb-1">Insurance Claim Status</p>
-            <InsuranceStepper status={bill.insuranceStatus || 'pending'} />
-          </div>
+              <div className="mt-4 pt-3 border-t border-[#e5e7eb]">
+                <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide mb-1">Insurance Claim Status</p>
+                <InsuranceStepper status={bill.insuranceStatus || 'pending'} />
+              </div>
 
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#e5e7eb]">
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 text-xs text-[#6b7280] hover:text-gray-900 border border-[#e5e7eb] rounded-lg px-3 py-1.5 transition-colors"
-            >
-              <Printer className="w-3.5 h-3.5" /> Print / Export PDF
-            </button>
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#e5e7eb]">
+                <button
+                  onClick={handlePrint}
+                  className="flex items-center gap-1.5 text-xs text-[#6b7280] hover:text-gray-900 border border-[#e5e7eb] rounded-lg px-3 py-1.5 transition-colors"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Print / Export PDF
+                </button>
 
-            {bill.approvalStatus === 'pending_review' && (
-              <div className="flex items-center gap-2">
-                {reviewing ? (
-                  <>
-                    <input
-                      type="text"
-                      placeholder="Review note (optional)"
-                      value={reviewNote}
-                      onChange={e => setReviewNote(e.target.value)}
-                      className="px-2 py-1.5 text-xs border border-[#e5e7eb] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-                    />
-                    <button onClick={() => setReviewing(false)} className="text-xs text-[#6b7280] border border-[#e5e7eb] rounded-lg px-2 py-1.5">Cancel</button>
-                    <button
-                      onClick={() => { onReject(bill._id, reviewNote); setReviewing(false); }}
-                      className="flex items-center gap-1 text-xs text-white bg-[#dc2626] rounded-lg px-3 py-1.5 hover:bg-[#b91c1c]"
-                    >
-                      <XCircle className="w-3.5 h-3.5" /> Reject
-                    </button>
-                    <button
-                      onClick={() => { onApprove(bill._id, reviewNote); setReviewing(false); }}
-                      className="flex items-center gap-1 text-xs text-white bg-[#16a34a] rounded-lg px-3 py-1.5 hover:bg-[#15803d]"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Approve
-                    </button>
-                  </>
-                ) : (
-                  <button onClick={() => setReviewing(true)} className="text-xs text-[#2563eb] font-medium hover:underline">
-                    Review Proposal
-                  </button>
+                {bill.approvalStatus === 'pending_review' && (
+                  <div className="flex items-center gap-2">
+                    {reviewing ? (
+                      <>
+                        <input
+                          type="text"
+                          placeholder="Review note (optional)"
+                          value={reviewNote}
+                          onChange={e => setReviewNote(e.target.value)}
+                          className="px-2 py-1.5 text-xs border border-[#e5e7eb] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+                        />
+                        <button onClick={() => setReviewing(false)} className="text-xs text-[#6b7280] border border-[#e5e7eb] rounded-lg px-2 py-1.5">Cancel</button>
+                        <button
+                          onClick={() => { onReject(bill._id, reviewNote); setReviewing(false); }}
+                          className="flex items-center gap-1 text-xs text-white bg-[#dc2626] rounded-lg px-3 py-1.5 hover:bg-[#b91c1c]"
+                        >
+                          <XCircle className="w-3.5 h-3.5" /> Reject
+                        </button>
+                        <button
+                          onClick={() => { onApprove(bill._id, reviewNote); setReviewing(false); }}
+                          className="flex items-center gap-1 text-xs text-white bg-[#16a34a] rounded-lg px-3 py-1.5 hover:bg-[#15803d]"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => setReviewing(true)} className="text-xs text-[#2563eb] font-medium hover:underline">
+                        Review Proposal
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
 
-          {bill.approvalStatus !== 'pending_review' && bill.reviewedBy && (
-            <p className="mt-2 text-[10px] text-[#6b7280]">
-              Reviewed by <strong>{bill.reviewedBy}</strong>
-              {bill.reviewNote && <> · "{bill.reviewNote}"</>}
-            </p>
+              {bill.approvalStatus !== 'pending_review' && bill.reviewedBy && (
+                <p className="mt-2 text-[10px] text-[#6b7280]">
+                  Reviewed by <strong>{bill.reviewedBy}</strong>
+                  {bill.reviewNote && <> \u00b7 "{bill.reviewNote}"</>}
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -319,18 +338,17 @@ export default function BillingPanel({ patientId, patientName }) {
         </button>
       </div>
 
-      {/* Broken bills warning */}
       {brokenCount > 0 && !generating && (
         <div className="flex items-start gap-2 text-xs px-3 py-2.5 rounded-lg border bg-orange-50 border-orange-200 text-orange-800">
           <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
           <span>
-            <strong>{brokenCount} bill{brokenCount > 1 ? 's' : ''}</strong> ha{brokenCount > 1 ? 've' : 's'} no itemized breakdown (generated before a schema update).
-            Delete {brokenCount > 1 ? 'them' : 'it'} using the <Trash2 className="inline w-3 h-3" /> button and click <strong>Generate Bill</strong> again.
+            <strong>{brokenCount} bill{brokenCount > 1 ? 's' : ''}</strong> saved without line items.
+            The billing agent process needs to be <strong>restarted</strong> \u2014 see instructions inside the bill.
+            Delete {brokenCount > 1 ? 'them' : 'it'} and regenerate after restarting.
           </span>
         </div>
       )}
 
-      {/* Status while polling */}
       {pollMsg && (
         <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border ${
           pollMsg.startsWith('Error') || pollMsg.includes('longer')
