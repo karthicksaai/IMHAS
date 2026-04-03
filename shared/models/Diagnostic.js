@@ -26,16 +26,25 @@ const diagnosticSchema = new mongoose.Schema(
     // Second opinion
     isSecondOpinion: { type: Boolean, default: false },
     originalDiagnosticId: { type: String, default: null },
-    // RAG evidence chunks
+    // RAG evidence chunks — finalScore added for recency-weighted ranking
     retrievedChunks: [
       {
         text: String,
         similarity: Number,
+        finalScore: Number,
         chunkId: String,
       },
     ],
     processingTime: { type: Number, default: 0 },
     errorMessage: { type: String, default: null },
+    // Feature 1: Confidence-Calibrated HITL Thresholds
+    hitlBand: {
+      type: String,
+      enum: ["auto_approve", "mandatory_review", "second_opinion"],
+      default: null,
+    },
+    // Feature 3: Drug Interaction Safety Layer
+    drugInteractionBlocked: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
