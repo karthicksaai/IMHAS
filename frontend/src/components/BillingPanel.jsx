@@ -3,7 +3,7 @@ import { billingApi } from '../api/billingApi';
 import { useAuth } from '../context/AuthContext';
 import {
   FileText, CheckCircle2, XCircle, Printer,
-  ChevronRight, Loader2, AlertTriangle
+  ChevronRight, Loader2, Trash2, AlertTriangle
 } from 'lucide-react';
 
 const API = 'http://localhost:5000';
@@ -24,7 +24,7 @@ function InsuranceStepper({ status }) {
               i === current ? 'border-[#2563eb] bg-[#2563eb] text-white' :
               'border-[#e5e7eb] bg-white text-[#6b7280]'
             }`}>
-              {rejected ? 'X' : i < current ? '✓' : i + 1}
+              {rejected ? 'X' : i < current ? '\u2713' : i + 1}
             </div>
             <p className={`text-[9px] mt-1 font-medium whitespace-nowrap ${
               i === current && !rejected ? 'text-[#2563eb]' : i < current ? 'text-[#16a34a]' : 'text-[#6b7280]'
@@ -39,12 +39,14 @@ function InsuranceStepper({ status }) {
   );
 }
 
-function BillCard({ bill, onApprove, onReject }) {
+function BillCard({ bill, onApprove, onReject, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [reviewNote, setReviewNote] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const printRef = useRef(null);
 
+  const isBroken = !bill.lineItems?.length && !bill.itemizedBill?.length;
   const statusColor = bill.approvalStatus === 'approved' ? '#16a34a' : bill.approvalStatus === 'rejected' ? '#dc2626' : '#d97706';
   const statusLabel = bill.approvalStatus === 'approved' ? 'Approved' : bill.approvalStatus === 'rejected' ? 'Rejected' : 'Pending Review';
 
@@ -52,95 +54,108 @@ function BillCard({ bill, onApprove, onReject }) {
     const content = printRef.current?.innerHTML;
     if (!content) return;
     const w = window.open('', '_blank');
-    w.document.write(`<html><head><title>Invoice</title><style>body{font-family:sans-serif;padding:32px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #e5e7eb;padding:8px 12px;font-size:13px}th{background:#f9fafb;font-weight:600}.reasoning{font-size:12px;color:#6b7280;margin-top:16px;padding:12px;background:#f9fafb;border-radius:6px}</style></head><body>${content}</body></html>`);
+    w.document.write(`<html><head><title>Invoice – ${bill._id}</title><style>body{font-family:sans-serif;padding:32px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #e5e7eb;padding:8px 12px;font-size:13px}th{background:#f9fafb;font-weight:600}.reasoning{font-size:12px;color:#6b7280;margin-top:16px;padding:12px;background:#f9fafb;border-radius:6px}</style></head><body>${content}</body></html>`);
     w.document.close();
     w.print();
   }
 
-  const items = bill.lineItems || bill.itemizedBill || [];
+  async function handleDelete() {
+    if (!confirm('Delete this bill? This cannot be undone.')) return;
+    setDeleting(true);
+    await onDelete(bill._id);
+  }
+
+  const items = bill.lineItems?.length ? bill.lineItems : (bill.itemizedBill || []);
   const total = bill.totalAmount || bill.totalOptimized || 0;
 
   return (
-    <div className="border border-[#e5e7eb] rounded-lg overflow-hidden">
-      <button
-        onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
-      >
-        <ChevronRight className={`w-4 h-4 text-[#6b7280] shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
-        <FileText className="w-4 h-4 text-[#6b7280] shrink-0" />
-        <div className="flex-1">
-          <span className="text-sm font-medium text-gray-900">
-            Invoice · {new Date(bill.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </span>
-        </div>
-        <span className="text-sm font-bold text-gray-900">₹{total.toLocaleString('en-IN')}</span>
-        <span className="text-xs font-medium shrink-0" style={{ color: statusColor }}>{statusLabel}</span>
-      </button>
+    <div className={`border rounded-lg overflow-hidden ${
+      isBroken ? 'border-orange-200 bg-orange-50/30' : 'border-[#e5e7eb]'
+    }`}>
+      <div className="flex items-center gap-3 px-4 py-3">
+        <button onClick={() => setExpanded(v => !v)} className="flex items-center gap-3 flex-1 text-left hover:opacity-80">
+          <ChevronRight className={`w-4 h-4 text-[#6b7280] shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+          <FileText className={`w-4 h-4 shrink-0 ${isBroken ? 'text-orange-400' : 'text-[#6b7280]'}`} />
+          <div className="flex-1">
+            <span className="text-sm font-medium text-gray-900">
+              Invoice · {new Date(bill.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </span>
+            {isBroken && (
+              <span className="ml-2 text-[10px] text-orange-500 font-medium">(no breakdown — delete &amp; regenerate)</span>
+            )}
+          </div>
+          <span className="text-sm font-bold text-gray-900">₹{total.toLocaleString('en-IN')}</span>
+          <span className="text-xs font-medium shrink-0" style={{ color: statusColor }}>{statusLabel}</span>
+        </button>
+        {/* Delete button always visible */}
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="ml-2 p-1.5 rounded-md text-[#6b7280] hover:text-[#dc2626] hover:bg-red-50 transition-colors disabled:opacity-40"
+          title="Delete bill"
+        >
+          {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+        </button>
+      </div>
 
-      {expanded && (
+      {expanded && !isBroken && (
         <div className="px-4 pb-4 border-t border-[#e5e7eb]" ref={printRef}>
-
-          {/* AI reasoning banner */}
           {bill.aiReasoning && (
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg reasoning">
               <p className="text-[11px] font-semibold text-blue-700 uppercase tracking-wide mb-1">AI Billing Summary</p>
               <p className="text-xs text-blue-800 leading-relaxed">{bill.aiReasoning}</p>
             </div>
           )}
 
-          {/* Line items table */}
-          {items.length > 0 ? (
-            <div className="mt-4">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[#e5e7eb]">
-                    <th className="text-left py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Description</th>
-                    <th className="text-left py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Category</th>
-                    <th className="text-right py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Amount</th>
+          <div className="mt-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#e5e7eb]">
+                  <th className="text-left py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Description</th>
+                  <th className="text-left py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Category</th>
+                  <th className="text-right py-2 text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#e5e7eb]">
+                {items.map((item, i) => (
+                  <tr key={i}>
+                    <td className="py-2.5">
+                      <p className="text-gray-900 font-medium">{item.description || item.name}</p>
+                      {item.rationale && (
+                        <p className="text-[11px] text-[#6b7280] mt-0.5 italic">{item.rationale}</p>
+                      )}
+                    </td>
+                    <td className="py-2.5">
+                      <span className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">
+                        {item.category || '—'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-right font-semibold text-gray-900">
+                      ₹{(item.amount || item.cost || 0).toLocaleString('en-IN')}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-[#e5e7eb]">
-                  {items.map((item, i) => (
-                    <tr key={i}>
-                      <td className="py-2.5">
-                        <p className="text-gray-900 font-medium">{item.description || item.name}</p>
-                        {item.rationale && (
-                          <p className="text-[11px] text-[#6b7280] mt-0.5">{item.rationale}</p>
-                        )}
-                      </td>
-                      <td className="py-2.5 text-[#6b7280] text-xs">{item.category || '—'}</td>
-                      <td className="py-2.5 text-right font-semibold text-gray-900">
-                        ₹{(item.amount || item.cost || 0).toLocaleString('en-IN')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-gray-300">
-                    <td colSpan={2} className="py-2.5 font-bold text-gray-900">Total</td>
-                    <td className="py-2.5 text-right font-bold text-gray-900 text-base">₹{total.toLocaleString('en-IN')}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          ) : (
-            <p className="mt-4 text-sm text-[#6b7280]">No itemized breakdown available.</p>
-          )}
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-gray-300">
+                  <td colSpan={2} className="py-3 font-bold text-gray-900">Total</td>
+                  <td className="py-3 text-right font-bold text-gray-900 text-base">₹{total.toLocaleString('en-IN')}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
 
-          {/* Savings */}
           {bill.savingsPercentage > 0 && (
             <p className="mt-2 text-xs text-[#16a34a] font-medium">
-              ✓ AI optimization applied — {bill.savingsPercentage.toFixed(1)}% discount
+              ✓ {bill.savingsPercentage.toFixed(1)}% discount applied
             </p>
           )}
 
-          {/* Insurance stepper */}
           <div className="mt-4 pt-3 border-t border-[#e5e7eb]">
             <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide mb-1">Insurance Claim Status</p>
             <InsuranceStepper status={bill.insuranceStatus || 'pending'} />
           </div>
 
-          {/* Actions */}
           <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#e5e7eb]">
             <button
               onClick={handlePrint}
@@ -175,10 +190,7 @@ function BillCard({ bill, onApprove, onReject }) {
                     </button>
                   </>
                 ) : (
-                  <button
-                    onClick={() => setReviewing(true)}
-                    className="text-xs text-[#2563eb] font-medium hover:underline"
-                  >
+                  <button onClick={() => setReviewing(true)} className="text-xs text-[#2563eb] font-medium hover:underline">
                     Review Proposal
                   </button>
                 )}
@@ -212,8 +224,9 @@ export default function BillingPanel({ patientId, patientName }) {
       const res = await fetch(`${API}/api/billing/${patientId}`, { headers });
       if (res.ok) {
         const data = await res.json();
-        setProposals(Array.isArray(data) ? data : (data.proposals || []));
-        return Array.isArray(data) ? data.length : (data.proposals?.length || 0);
+        const list = Array.isArray(data) ? data : (data.proposals || []);
+        setProposals(list);
+        return list.length;
       }
     } catch {}
     finally { setLoading(false); }
@@ -222,23 +235,19 @@ export default function BillingPanel({ patientId, patientName }) {
 
   useEffect(() => { loadBills(); }, [patientId]);
 
-  // Poll every 3s until a new bill appears (Gemini can take 10-20s)
   function startPolling(prevCount) {
     let attempts = 0;
-    const maxAttempts = 15; // 45 seconds max
-    setPollMsg('Generating bill with AI... this takes ~15 seconds');
-
+    setPollMsg('Generating bill with AI\u2026 this takes ~15 seconds');
     pollRef.current = setInterval(async () => {
       attempts++;
       const count = await loadBills();
       if (count > prevCount) {
-        // New bill arrived
         clearInterval(pollRef.current);
         setPollMsg('');
         setGenerating(false);
-      } else if (attempts >= maxAttempts) {
+      } else if (attempts >= 20) {
         clearInterval(pollRef.current);
-        setPollMsg('Bill generation is taking longer than expected. Refresh manually.');
+        setPollMsg('Taking longer than expected \u2014 check if the billing agent is running.');
         setGenerating(false);
       }
     }, 3000);
@@ -256,8 +265,7 @@ export default function BillingPanel({ patientId, patientName }) {
         body: JSON.stringify({ patientName }),
       });
       if (res.ok) {
-        const prevCount = proposals.length;
-        startPolling(prevCount);
+        startPolling(proposals.length);
       } else {
         const err = await res.json().catch(() => ({}));
         setPollMsg(`Error: ${err.error || 'Failed to start bill generation'}`);
@@ -283,6 +291,15 @@ export default function BillingPanel({ patientId, patientName }) {
     } catch {}
   }
 
+  async function handleDelete(id) {
+    try {
+      await fetch(`${API}/api/billing/${id}`, { method: 'DELETE', headers });
+      setProposals(prev => prev.filter(p => p._id !== id));
+    } catch {}
+  }
+
+  const brokenCount = proposals.filter(p => !p.lineItems?.length && !p.itemizedBill?.length).length;
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -302,7 +319,18 @@ export default function BillingPanel({ patientId, patientName }) {
         </button>
       </div>
 
-      {/* Status message while polling */}
+      {/* Broken bills warning */}
+      {brokenCount > 0 && !generating && (
+        <div className="flex items-start gap-2 text-xs px-3 py-2.5 rounded-lg border bg-orange-50 border-orange-200 text-orange-800">
+          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          <span>
+            <strong>{brokenCount} bill{brokenCount > 1 ? 's' : ''}</strong> ha{brokenCount > 1 ? 've' : 's'} no itemized breakdown (generated before a schema update).
+            Delete {brokenCount > 1 ? 'them' : 'it'} using the <Trash2 className="inline w-3 h-3" /> button and click <strong>Generate Bill</strong> again.
+          </span>
+        </div>
+      )}
+
+      {/* Status while polling */}
       {pollMsg && (
         <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border ${
           pollMsg.startsWith('Error') || pollMsg.includes('longer')
@@ -326,7 +354,13 @@ export default function BillingPanel({ patientId, patientName }) {
         <div className="space-y-2">
           <p className="text-xs font-semibold text-[#6b7280] uppercase tracking-wide">Bill History ({proposals.length})</p>
           {proposals.map(bill => (
-            <BillCard key={bill._id} bill={bill} onApprove={handleApprove} onReject={handleReject} />
+            <BillCard
+              key={bill._id}
+              bill={bill}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              onDelete={handleDelete}
+            />
           ))}
         </div>
       )}

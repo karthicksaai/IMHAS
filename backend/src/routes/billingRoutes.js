@@ -8,11 +8,7 @@ import path from 'path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedModels = path.resolve(__dirname, '../../..', 'shared', 'models');
 
-let Patient, BillingProposal;
-try {
-  const pm = await import(pathToFileURL(path.join(sharedModels, 'Patient.js')).href);
-  Patient = pm.default;
-} catch {}
+let BillingProposal;
 try {
   const bm = await import(pathToFileURL(path.join(sharedModels, 'BillingProposal.js')).href);
   BillingProposal = bm.default;
@@ -43,7 +39,7 @@ function getBillingModel() {
 
 const router = express.Router();
 
-// GET /api/billing/:patientId — list all bills for a patient
+// GET /api/billing/:patientId
 router.get('/:patientId', authenticate, async (req, res) => {
   try {
     const bills = await getBillingModel()
@@ -56,34 +52,25 @@ router.get('/:patientId', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/billing/:patientId/generate — enqueue billing agent job
+// POST /api/billing/:patientId/generate
 router.post('/:patientId/generate', authenticate, async (req, res) => {
   try {
     const { patientId } = req.params;
     const { patientName } = req.body;
-
-    // Send job to billing-agent via BullMQ
     const job = await billingQueue.add('generate-itemized-bill', {
       patientId,
       patientName: patientName || 'Patient',
       requestedBy: req.user?.name || 'doctor',
     });
-
     console.log(`[Billing] Queued job ${job.id} for patient ${patientId}`);
-
-    // Respond immediately — agent runs async in background
-    res.json({
-      queued: true,
-      jobId: job.id,
-      message: 'Bill generation started. It will appear in a few seconds — the page will refresh automatically.',
-    });
+    res.json({ queued: true, jobId: job.id });
   } catch (err) {
-    console.error('[Billing] Failed to enqueue job:', err.message);
+    console.error('[Billing] Queue error:', err.message);
     res.status(500).json({ error: 'Failed to start bill generation. Is the billing agent running?', detail: err.message });
   }
 });
 
-// POST /api/billing/:id/review — approve or reject a bill
+// POST /api/billing/:id/review
 router.post('/:id/review', authenticate, async (req, res) => {
   try {
     const { approvalStatus, reviewNote, reviewedBy } = req.body;
@@ -97,6 +84,17 @@ router.post('/:id/review', authenticate, async (req, res) => {
     );
     if (!bill) return res.status(404).json({ error: 'Bill not found' });
     res.json(bill);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/billing/:id  — delete a single bill
+router.delete('/:id', authenticate, async (req, res) => {
+  try {
+    const bill = await getBillingModel().findByIdAndDelete(req.params.id);
+    if (!bill) return res.status(404).json({ error: 'Bill not found' });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
