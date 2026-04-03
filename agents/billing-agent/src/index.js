@@ -9,6 +9,23 @@ import { applyDiscountRules } from "./discountEngine.js";
 // Connect to MongoDB
 await connectDB(process.env.MONGO_URI);
 
+// ── Heartbeat ─────────────────────────────────────────────────────────────────
+const BACKEND = process.env.BACKEND_URL || "http://localhost:5000";
+const AGENT_NAME = "billing";
+let jobsProcessedToday = 0;
+
+function sendHeartbeat() {
+  fetch(`${BACKEND}/api/health/heartbeat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agent: AGENT_NAME, jobsProcessedToday }),
+  }).catch(() => {});
+}
+
+setInterval(sendHeartbeat, 15000);
+sendHeartbeat();
+// ─────────────────────────────────────────────────────────────────────────────
+
 console.log("Billing Agent starting...");
 
 const billingWorker = new Worker(
@@ -47,7 +64,7 @@ const billingWorker = new Worker(
       console.log(`Original total: $${totalOriginal.toFixed(2)}`);
       console.log(`Optimized total: $${totalOptimized.toFixed(2)}`);
 
-      // 3. Apply discount rules — now includes patientAge so senior discount fires
+      // 3. Apply discount rules
       console.log("Applying discount rules...");
       const { finalTotal, discounts } = applyDiscountRules(totalOptimized, {
         patientConditions,
@@ -73,6 +90,9 @@ const billingWorker = new Worker(
         savingsPercentage: parseFloat(savingsPercentage),
         optimizationStrategy: discounts.map((d) => d.description).join("; "),
       });
+
+      jobsProcessedToday++;
+      sendHeartbeat();
 
       const duration = Date.now() - startTime;
       console.log(`\n[Billing Agent] Job ${job.id} completed in ${duration}ms`);
